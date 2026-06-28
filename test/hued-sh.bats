@@ -23,7 +23,7 @@ teardown() {
 # --- .hued file behavior ---
 
 @test "no .hued, no env: resets both channels" {
-  run _hued_apply
+  run _hued_apply_fallback
   [ "$status" -eq 0 ]
   [[ "$output" == *"$BG_RESET"* ]]
   [[ "$output" == *"$FG_RESET"* ]]
@@ -31,14 +31,14 @@ teardown() {
 
 @test ".hued bg only: applies bg, resets fg" {
   printf "background=#1a0a0a\n" > .hued
-  run _hued_apply
+  run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
   [[ "$output" == *"$FG_RESET"* ]]
 }
 
 @test ".hued bg+fg: applies both" {
   printf "background=#1a0a0a\nforeground=#c8ff59\n" > .hued
-  run _hued_apply
+  run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
   [[ "$output" == *"${ESC}]10;rgb:c8/ff/59${BEL}"* ]]
 }
@@ -47,41 +47,41 @@ teardown() {
 
 @test "env bg only: overrides file bg, file fg still used" {
   printf "background=#000000\nforeground=#ffffff\n" > .hued
-  HUED_BACKGROUND="#ff0000" run _hued_apply
+  HUED_BACKGROUND="#ff0000" run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
   [[ "$output" == *"${ESC}]10;rgb:ff/ff/ff${BEL}"* ]]
 }
 
 @test "env both: ignores file entirely" {
   printf "background=#000000\nforeground=#ffffff\n" > .hued
-  HUED_BACKGROUND="#ff0000" HUED_FOREGROUND="#00ff00" run _hued_apply
+  HUED_BACKGROUND="#ff0000" HUED_FOREGROUND="#00ff00" run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
   [[ "$output" == *"${ESC}]10;rgb:00/ff/00${BEL}"* ]]
 }
 
 @test "env without file: applies env values" {
-  HUED_BACKGROUND="#ff0000" run _hued_apply
+  HUED_BACKGROUND="#ff0000" run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
   [[ "$output" == *"$FG_RESET"* ]]
 }
 
 @test "env unset (simulated): re-running falls back to reset" {
   printf "background=#000000\n" > .hued
-  HUED_BACKGROUND="#ff0000" run _hued_apply
+  HUED_BACKGROUND="#ff0000" run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
   rm .hued
-  run _hued_apply
+  run _hued_apply_fallback
   [[ "$output" == *"$BG_RESET"* ]]
   [[ "$output" == *"$FG_RESET"* ]]
 }
 
 @test "env accepts named colors" {
-  HUED_BACKGROUND="midnightblue" run _hued_apply
+  HUED_BACKGROUND="midnightblue" run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:19/19/70${BEL}"* ]]
 }
 
 @test "env is case-insensitive" {
-  HUED_BACKGROUND="MIDNIGHTBLUE" run _hued_apply
+  HUED_BACKGROUND="MIDNIGHTBLUE" run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:19/19/70${BEL}"* ]]
 }
 
@@ -89,7 +89,7 @@ teardown() {
 
 @test "env bg=none: resets bg even when file sets it" {
   printf "background=#000000\nforeground=#ffffff\n" > .hued
-  HUED_BACKGROUND="none" run _hued_apply
+  HUED_BACKGROUND="none" run _hued_apply_fallback
   [[ "$output" == *"$BG_RESET"* ]]
   [[ "$output" == *"${ESC}]10;rgb:ff/ff/ff${BEL}"* ]]
 }
@@ -99,13 +99,29 @@ teardown() {
   mkdir sub
   printf "background=none\n" > sub/.hued
   cd sub
-  run _hued_apply
+  run _hued_apply_fallback
   [[ "$output" == *"$BG_RESET"* ]]
   # parent's fg is not inherited because the closer .hued breaks the walk
   [[ "$output" == *"$FG_RESET"* ]]
 }
 
 @test "env none is case-insensitive" {
-  HUED_BACKGROUND="None" run _hued_apply
+  HUED_BACKGROUND="None" run _hued_apply_fallback
   [[ "$output" == *"$BG_RESET"* ]]
+}
+
+# --- dispatcher: delegate vs fallback ---
+
+@test "_hued_apply delegates to 'hued apply' when hued is on PATH" {
+  hued() { echo "DELEGATED $*"; }
+  output="$(_hued_apply)"
+  [[ "$output" == "DELEGATED apply" ]]
+}
+
+@test "_hued_apply uses the inline fallback when hued is unavailable" {
+  # Shadow the 'command' builtin so 'command -v hued' reports not-found.
+  command() { return 1; }
+  output="$(_hued_apply)"
+  [[ "$output" == *"$BG_RESET"* ]]
+  [[ "$output" == *"$FG_RESET"* ]]
 }
