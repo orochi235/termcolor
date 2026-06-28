@@ -28,6 +28,7 @@ _complete() {
   [[ "${COMPREPLY[*]}" == *"resolve"* ]]
   [[ "${COMPREPLY[*]}" == *"pack"* ]]
   [[ "${COMPREPLY[*]}" == *"unpack"* ]]
+  [[ "${COMPREPLY[*]}" == *"apply"* ]]
 }
 
 @test "get: suggests bg and fg" {

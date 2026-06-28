@@ -40,7 +40,7 @@ _hued_resolve() {
   fi
 }
 
-_hued_apply() {
+_hued_apply_fallback() {
   local bg="" fg="" hex
 
   local dir="$PWD"
@@ -75,5 +75,13 @@ _hued_apply() {
     [[ -n "$hex" ]] && printf "\e]10;rgb:%s/%s/%s\a" "${hex:0:2}" "${hex:2:2}" "${hex:4:2}"
   else
     printf "\e]110;\a"
+  fi
+}
+
+_hued_apply() {
+  if command -v hued >/dev/null 2>&1; then
+    hued apply
+  else
+    _hued_apply_fallback
   fi
 }

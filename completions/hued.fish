@@ -1,5 +1,5 @@
 set -l names_file "$HOMEBREW_PREFIX/share/hued-names.sh"
-set -l subcommands set unset fork get mod where resolve pack unpack
+set -l subcommands set unset fork get mod apply where resolve pack unpack
 set -l mod_ops darken lighten saturate desaturate rotate complement to-gray mix
 
 complete -c hued -f
@@ -8,6 +8,7 @@ complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "unset"   
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "fork"    -d "Materialize inherited colors into a new .hued in the current directory"
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "get"     -d "Print the resolved hex for a channel"
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "mod"     -d "Apply a pastel transform to a channel and save the result"
+complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "apply"   -d "Repaint the terminal to match the current .hued"
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "where"   -d "Print the path to the controlling .hued file"
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "resolve" -d "Print canonical #rrggbb hex for a color (via pastel)"
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "pack"    -d "Generate a JSON map of .hued configs from a directory tree"
