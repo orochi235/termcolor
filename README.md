@@ -73,6 +73,7 @@ hued get bg|fg                # print the resolved hex for a channel
 hued set <color>              # set background color
 hued set bg|fg <color>        # set the named channel
 hued mod bg|fg <op> [<args>]  # apply a pastel transform to a channel
+hued apply                    # repaint the terminal to match the current .hued
 hued resolve <color>          # print canonical #rrggbb for a color (requires pastel)
 hued pack [<dir>] [-o <file>] # export all .hued files under <dir> to JSON
 hued unpack <file> [--force]  # restore .hued files from a JSON export
@@ -131,6 +132,16 @@ Set a value to `none` to explicitly suppress that channel, even if a parent `.hu
 # subdir/.hued — opt out of parent's background, keep its foreground
 background=none
 ```
+
+`hued set`, `unset`, `mod`, `fork`, and `unpack` repaint the current terminal
+immediately (they emit the color escapes to your terminal after writing the
+file), so you no longer have to wait for the next prompt. You can also force a
+repaint anytime with `hued apply` — handy after editing a `.hued` by hand.
+
+Note: the prompt hook prefers the `hued` binary when it is on your `PATH`. For
+`HUED_BACKGROUND` / `HUED_FOREGROUND` to take effect through it, **export** them
+(tools like direnv and mise already do). A non-exported shell variable is only
+honored by the hook's built-in fallback.
 
 ## FAQ
 
