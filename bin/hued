@@ -78,6 +78,69 @@ _hued_set_key() {
   echo "Set ${key} to ${color} in ${PWD}/.hued"
 }
 
+# Resolve a color value (6-hex, 3-hex shorthand, or X11 name) to bare rrggbb.
+# Prints an empty string if it cannot be resolved.
+_hued_resolve_hex() {
+  local bare="${1#\#}"
+  bare="${bare// /}"
+  bare="${bare,,}"
+  if [[ "$bare" =~ ^[0-9a-f]{6}$ ]]; then
+    printf '%s' "$bare"
+  elif [[ "$bare" =~ ^[0-9a-f]{3}$ ]]; then
+    printf '%s' "${bare:0:1}${bare:0:1}${bare:1:1}${bare:1:1}${bare:2:1}${bare:2:1}"
+  else
+    local hex
+    hex=$({ grep -m1 "\[${bare}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null || true; } | cut -d= -f2)
+    printf '%s' "${hex#\#}"
+  fi
+}
+
+# Emit OSC 10/11 escapes for the given bg/fg values to stdout.
+# Empty value -> reset escape for that channel.
+_hued_emit_osc() {
+  local bg="$1" fg="$2" hex
+  if [[ -n "$bg" ]]; then
+    hex="$(_hued_resolve_hex "$bg")"
+    [[ -n "$hex" ]] && printf '\e]11;rgb:%s/%s/%s\a' "${hex:0:2}" "${hex:2:2}" "${hex:4:2}"
+  else
+    printf '\e]111;\a'
+  fi
+  if [[ -n "$fg" ]]; then
+    hex="$(_hued_resolve_hex "$fg")"
+    [[ -n "$hex" ]] && printf '\e]10;rgb:%s/%s/%s\a' "${hex:0:2}" "${hex:2:2}" "${hex:4:2}"
+  else
+    printf '\e]110;\a'
+  fi
+}
+
+# Repaint the terminal to match the nearest .hued (plus env overrides).
+# Writes to ${HUED_TTY:-/dev/tty}; silent no-op if that cannot be opened.
+_hued_apply_cmd() {
+  local bg="" fg="" dir="$PWD"
+  while [[ "$dir" != / && -n "$dir" ]]; do
+    if [[ -f "$dir/.hued" ]]; then
+      bg=$({ grep -m1 '^background=' "$dir/.hued" || true; } | cut -d= -f2 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+      fg=$({ grep -m1 '^foreground=' "$dir/.hued" || true; } | cut -d= -f2 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+      [[ -n "$bg" || -n "$fg" ]] && break
+    fi
+    dir="${dir%/*}"
+  done
+
+  if [[ -n "${HUED_BACKGROUND:-}" ]]; then
+    bg=$(printf '%s' "$HUED_BACKGROUND" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  fi
+  if [[ -n "${HUED_FOREGROUND:-}" ]]; then
+    fg=$(printf '%s' "$HUED_FOREGROUND" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  fi
+  [[ "$bg" == "none" ]] && bg=""
+  [[ "$fg" == "none" ]] && fg=""
+
+  local target="${HUED_TTY:-/dev/tty}"
+  { exec 3>"$target"; } 2>/dev/null || return 0
+  _hued_emit_osc "$bg" "$fg" >&3
+  exec 3>&-
+}
+
 case "${1:-}" in
   "")
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
@@ -91,6 +154,10 @@ case "${1:-}" in
   where)
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
     echo "$file"
+    ;;
+
+  apply)
+    _hued_apply_cmd
     ;;
 
   resolve)
