@@ -87,3 +87,57 @@ teardown() {
   [ -z "$output" ]
   [ ! -e "$TMPDIR/nope/tty.out" ]
 }
+
+# --- mutating commands repaint after writing ---
+
+@test "set bg: repaints after writing" {
+  HUED_TTY="$OUT" run "$HUED" set bg "#ff0000"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Set background to #ff0000"* ]]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+}
+
+@test "set <color>: repaints after writing" {
+  HUED_TTY="$OUT" run "$HUED" set "#00ff00"
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:00/ff/00${BEL}"* ]]
+}
+
+@test "mod: repaints after transforming" {
+  if ! command -v pastel >/dev/null 2>&1; then skip "pastel not installed"; fi
+  printf "background=#808080\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" mod bg lighten 50%
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:"* ]]
+}
+
+@test "unset: repaints after removing a channel" {
+  printf "background=#1a0a0a\nforeground=#ffffff\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" unset bg
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"$BG_RESET"* ]]
+  [[ "$output" == *"${ESC}]10;rgb:ff/ff/ff${BEL}"* ]]
+}
+
+@test "fork: repaints after materializing inherited colors" {
+  printf "background=#1a0a0a\n" > .hued
+  mkdir sub
+  cd sub
+  HUED_TTY="$OUT" run "$HUED" fork
+  [ "$status" -eq 0 ]
+  [ -f .hued ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
+}
+
+@test "unpack: repaints after restoring" {
+  printf '{"%s": {"background": "#1a0a0a"}}' "$TMPDIR" > export.json
+  HUED_TTY="$OUT" run "$HUED" unpack export.json --force
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
+}

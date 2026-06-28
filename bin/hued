@@ -227,6 +227,7 @@ case "${1:-}" in
         ;;
     esac
     _hued_set_key "$key" "$new"
+    _hued_apply_cmd
     ;;
 
   set)
@@ -252,6 +253,7 @@ case "${1:-}" in
         _hued_set_key "background" "$2"
         ;;
     esac
+    _hued_apply_cmd
     ;;
 
   fork)
@@ -278,6 +280,7 @@ case "${1:-}" in
     fi
     if [[ -n "$bg" ]]; then _hued_set_key "background" "$bg"; fi
     if [[ -n "$fg" ]]; then _hued_set_key "foreground" "$fg"; fi
+    _hued_apply_cmd
     ;;
 
   unset)
@@ -294,6 +297,7 @@ case "${1:-}" in
     grep -v "^${key}=" .hued > .hued.tmp || true
     mv .hued.tmp .hued
     echo "Unset ${key} in ${PWD}/.hued"
+    _hued_apply_cmd
     ;;
 
   pack)
@@ -364,6 +368,7 @@ for dirpath, config in data.items():
             f.write(f'{k}={v}\n')
     print(f'Wrote {hued_path}')
 PYEOF
+    _hued_apply_cmd
     ;;
 
   -i|--interactive)
