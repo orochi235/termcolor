@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-HUED_VERSION="3.2.1"
+HUED_VERSION="3.3.0"
 
 _HUED_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -66,14 +66,22 @@ _hued_read_stdin_color() {
 }
 
 _hued_set_key() {
-  local key="$1" color
-  color="$(_hued_normalize_color "$2")"
+  local key="$1" raw="$2" color line
+  color="$(_hued_normalize_color "$raw")"
+  line="${key}=${color}"
+  # If the input was a recognized X11 name (not hex/none) that resolved to
+  # #rrggbb, keep the original name as an inline comment for humans.
+  local bare="${raw#\#}"
+  if [[ ! "$bare" =~ ^[0-9a-fA-F]{3}$ && ! "$bare" =~ ^[0-9a-fA-F]{6}$ \
+        && "$raw" != "none" && "$color" =~ ^#[0-9a-f]{6}$ ]]; then
+    line="${line}  # ${raw}"
+  fi
   if [[ -f .hued ]]; then
     grep -v "^${key}=" .hued > .hued.tmp || true
-    echo "${key}=${color}" >> .hued.tmp
+    printf '%s\n' "$line" >> .hued.tmp
     mv .hued.tmp .hued
   else
-    printf "# https://github.com/orochi235/hued\n${key}=%s\n" "$color" > .hued
+    printf "# https://github.com/orochi235/hued\n%s\n" "$line" > .hued
   fi
   echo "Set ${key} to ${color} in ${PWD}/.hued"
 }
@@ -119,8 +127,8 @@ _hued_apply_cmd() {
   local bg="" fg="" dir="$PWD"
   while [[ "$dir" != / && -n "$dir" ]]; do
     if [[ -f "$dir/.hued" ]]; then
-      bg=$({ grep -m1 '^background=' "$dir/.hued" || true; } | cut -d= -f2 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-      fg=$({ grep -m1 '^foreground=' "$dir/.hued" || true; } | cut -d= -f2 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+      bg=$({ grep -m1 '^background=' "$dir/.hued" || true; } | cut -d= -f2 | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+      fg=$({ grep -m1 '^foreground=' "$dir/.hued" || true; } | cut -d= -f2 | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
       [[ -n "$bg" || -n "$fg" ]] && break
     fi
     dir="${dir%/*}"
@@ -176,7 +184,7 @@ case "${1:-}" in
       *) echo "Usage: hued get [bg|fg]" >&2; exit 1 ;;
     esac
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
-    raw=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | tr -d '[:space:]')
+    raw=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | awk '{print $1}')
     [[ -z "$raw" ]] && exit 1
     command -v pastel >/dev/null 2>&1 || {
       echo "hued get: requires 'pastel' (brew install pastel)" >&2
@@ -198,7 +206,7 @@ case "${1:-}" in
       exit 1
     }
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
-    current=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | tr -d '[:space:]')
+    current=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | awk '{print $1}')
     [[ -z "$current" ]] && { echo "hued mod: ${key} not set in $file" >&2; exit 1; }
     case "$op" in
       darken|lighten|saturate|desaturate)
@@ -272,8 +280,8 @@ case "${1:-}" in
     done
     [[ -z "$ancestor" && -f "/.hued" ]] && ancestor="/.hued"
     [[ -z "$ancestor" ]] && { echo "hued fork: no ancestor .hued to inherit from" >&2; exit 1; }
-    bg=$({ grep -m1 '^background=' "$ancestor" || true; } | cut -d= -f2 | tr -d '[:space:]')
-    fg=$({ grep -m1 '^foreground=' "$ancestor" || true; } | cut -d= -f2 | tr -d '[:space:]')
+    bg=$({ grep -m1 '^background=' "$ancestor" || true; } | cut -d= -f2 | awk '{print $1}')
+    fg=$({ grep -m1 '^foreground=' "$ancestor" || true; } | cut -d= -f2 | awk '{print $1}')
     if [[ -z "$bg" && -z "$fg" ]]; then
       echo "hued fork: ancestor $ancestor has no background or foreground to inherit" >&2
       exit 1
@@ -330,7 +338,11 @@ for dirpath, _, files in os.walk(root_dir):
                     continue
                 if '=' in line:
                     k, v = line.split('=', 1)
-                    config[k.strip()] = v.strip()
+                    # value is the first whitespace-delimited token; the rest
+                    # (e.g. "  # aliceblue") is an inline comment, dropped here.
+                    v = v.split()
+                    if v:
+                        config[k.strip()] = v[0]
         if config:
             result[dirpath] = config
 print(json.dumps(result, indent=2))
@@ -349,10 +361,38 @@ PYEOF
     file="$2"
     force=0
     [[ "${3:-}" == "--force" ]] && force=1
-    python3 - "$file" "$force" <<'PYEOF'
-import os, json, sys
+    python3 - "$file" "$force" "$_HUED_DIR/hued-names.sh" <<'PYEOF'
+import os, json, re, sys
 
-file, force = sys.argv[1], sys.argv[2] == '1'
+file, force, names_file = sys.argv[1], sys.argv[2] == '1', sys.argv[3]
+
+# Load X11 name -> #rrggbb map from hued-names.sh so packed configs that
+# carry named colors get normalized to hex on unpack.
+names = {}
+try:
+    with open(names_file) as f:
+        for line in f:
+            m = re.match(r'\s*\[([^\]]+)\]=(#[0-9a-fA-F]{6})', line)
+            if m:
+                names[m.group(1)] = m.group(2).lower()
+except OSError:
+    pass
+
+def normalize(value):
+    """Return (hex_or_original, original_name_or_None)."""
+    v = value.split()[0] if value.split() else value
+    bare = v[1:] if v.startswith('#') else v
+    if re.fullmatch(r'[0-9a-fA-F]{3}', bare):
+        bare = ''.join(c * 2 for c in bare)
+    if re.fullmatch(r'[0-9a-fA-F]{6}', bare):
+        return '#' + bare.lower(), None
+    if v.lower() == 'none':
+        return 'none', None
+    hexv = names.get(v)
+    if hexv:
+        return hexv, v
+    return v, None
+
 with open(file) as f:
     data = json.load(f)
 
@@ -365,7 +405,11 @@ for dirpath, config in data.items():
     with open(hued_path, 'w') as f:
         f.write('# https://github.com/orochi235/hued\n')
         for k, v in config.items():
-            f.write(f'{k}={v}\n')
+            hexv, name = normalize(v)
+            if name:
+                f.write(f'{k}={hexv}  # {name}\n')
+            else:
+                f.write(f'{k}={hexv}\n')
     print(f'Wrote {hued_path}')
 PYEOF
     _hued_apply_cmd
@@ -380,8 +424,8 @@ PYEOF
     _current_bg=""
     _current_fg=""
     if _file=$(_hued_find 2>/dev/null); then
-      _raw_bg=$({ grep -m1 '^background=' "$_file" || true; } | cut -d= -f2 | tr -d '[:space:]')
-      _raw_fg=$({ grep -m1 '^foreground=' "$_file" || true; } | cut -d= -f2 | tr -d '[:space:]')
+      _raw_bg=$({ grep -m1 '^background=' "$_file" || true; } | cut -d= -f2 | awk '{print $1}')
+      _raw_fg=$({ grep -m1 '^foreground=' "$_file" || true; } | cut -d= -f2 | awk '{print $1}')
       [[ -z "$_raw_bg" ]] || _current_bg=$(_hued_normalize_color "$_raw_bg")
       [[ -z "$_raw_fg" ]] || _current_fg=$(_hued_normalize_color "$_raw_fg")
     fi

@@ -12,11 +12,19 @@ foreground=#c8ff59
 
 When you `cd` into that directory (or any subdirectory), your terminal background changes. When you leave, it resets. The nearest `.hued` walking up from `$PWD` wins.
 
-Named colors from the [X11 rgb.txt](https://gitlab.freedesktop.org/xorg/app/rgb/-/raw/master/rgb.txt) list are supported in addition to hex values:
+Named colors from the [X11 rgb.txt](https://gitlab.freedesktop.org/xorg/app/rgb/-/raw/master/rgb.txt) list are accepted as input:
+
+```zsh
+hued set bg midnightblue
+```
+
+hued always **stores a hex value** so any tool reading `.hued` gets a usable color without needing the name table. The original name is kept as an inline comment:
 
 ```ini
-background=midnightblue
+background=#191970  # midnightblue
 ```
+
+Everything after the value on a line is treated as a comment and ignored when parsing.
 
 ## Install
 

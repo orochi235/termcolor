@@ -43,6 +43,12 @@ teardown() {
   [[ "$output" == *"${ESC}]10;rgb:c8/ff/59${BEL}"* ]]
 }
 
+@test ".hued with inline name comment: applies hex" {
+  printf "background=#1a0a0a  # something\n" > .hued
+  run _hued_apply_fallback
+  [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
+}
+
 # --- env var overrides ---
 
 @test "env bg only: overrides file bg, file fg still used" {

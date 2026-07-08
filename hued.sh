@@ -46,8 +46,8 @@ _hued_apply_fallback() {
   local dir="$PWD"
   while [[ "$dir" != / && -n "$dir" ]]; do
     if [[ -f "$dir/.hued" ]]; then
-      bg=$(grep -m1 '^background=' "$dir/.hued" | cut -d= -f2 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-      fg=$(grep -m1 '^foreground=' "$dir/.hued" | cut -d= -f2 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+      bg=$(grep -m1 '^background=' "$dir/.hued" | cut -d= -f2 | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+      fg=$(grep -m1 '^foreground=' "$dir/.hued" | cut -d= -f2 | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
       [[ -n "$bg" || -n "$fg" ]] && break
     fi
     dir="${dir%/*}"

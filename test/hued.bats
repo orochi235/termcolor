@@ -631,6 +631,75 @@ teardown() {
   grep -q "background=#abcdef" target/.hued
 }
 
+# --- inline name comments ---
+
+@test "set bg: keeps named color as inline comment" {
+  run "$HUED" set bg "aliceblue"
+  [ "$status" -eq 0 ]
+  grep -q "^background=#f0f8ff  # aliceblue$" .hued
+}
+
+@test "set bg: hex input gets no inline comment" {
+  run "$HUED" set bg "#ff0000"
+  [ "$status" -eq 0 ]
+  grep -q "^background=#ff0000$" .hued
+}
+
+@test "set bg: none gets no inline comment" {
+  run "$HUED" set bg "none"
+  [ "$status" -eq 0 ]
+  grep -q "^background=none$" .hued
+}
+
+@test "get: ignores inline name comment" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#f0f8ff  # aliceblue\n" > .hued
+  run "$HUED" get bg
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"f0f8ff"* ]]
+}
+
+@test "mod: ignores inline name comment when reading current" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ffffff  # white\n" > .hued
+  run "$HUED" mod bg to-gray
+  [ "$status" -eq 0 ]
+  grep -q "^background=#[0-9a-f]\{6\}$" .hued
+}
+
+@test "pack: strips inline name comment to bare hex" {
+  printf "background=#f0f8ff  # aliceblue\n" > .hued
+  run "$HUED" pack "$TMPDIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"#f0f8ff"'* ]]
+  [[ "$output" != *"aliceblue"* ]]
+}
+
+@test "unpack: normalizes named color to hex with comment" {
+  mkdir -p target
+  printf '{ "%s/target": { "background": "aliceblue" } }' "$TMPDIR" > hued.json
+  run "$HUED" unpack hued.json
+  [ "$status" -eq 0 ]
+  grep -q "^background=#f0f8ff  # aliceblue$" target/.hued
+}
+
+@test "unpack: leaves hex values untouched" {
+  mkdir -p target
+  printf '{ "%s/target": { "background": "#abcdef" } }' "$TMPDIR" > hued.json
+  run "$HUED" unpack hued.json
+  [ "$status" -eq 0 ]
+  grep -q "^background=#abcdef$" target/.hued
+}
+
+@test "fork: inherits resolved hex from commented ancestor" {
+  printf "background=#f0f8ff  # aliceblue\n" > .hued
+  mkdir sub
+  cd sub
+  run "$HUED" fork
+  [ "$status" -eq 0 ]
+  grep -q "^background=#f0f8ff$" .hued
+}
+
 # --- trailing newlines ---
 
 _ends_with_newline() {

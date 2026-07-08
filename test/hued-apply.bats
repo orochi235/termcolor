@@ -46,6 +46,14 @@ teardown() {
   [[ "$output" == *"${ESC}]11;rgb:19/19/70${BEL}"* ]]
 }
 
+@test "apply: ignores inline name comment" {
+  printf "background=#1a0a0a  # something\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
+}
+
 @test "apply: none resets the channel" {
   printf "background=none\nforeground=#ffffff\n" > .hued
   HUED_TTY="$OUT" run "$HUED" apply
