@@ -631,6 +631,17 @@ teardown() {
   grep -q "background=#abcdef" target/.hued
 }
 
+# --- names file resolution under install layouts ---
+
+@test "set: resolves named color under share/ layout (brew install)" {
+  mkdir -p prefix/bin prefix/share
+  cp "$HUED" prefix/bin/hued
+  cp "$BATS_TEST_DIRNAME/../hued-names.sh" prefix/share/hued-names.sh
+  run "$PWD/prefix/bin/hued" set bg goldenrod
+  [ "$status" -eq 0 ]
+  grep -q "^background=#daa520  # goldenrod$" .hued
+}
+
 # --- inline name comments ---
 
 @test "set bg: keeps named color as inline comment" {

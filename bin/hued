@@ -3,9 +3,15 @@
 
 set -euo pipefail
 
-HUED_VERSION="3.3.0"
+HUED_VERSION="3.3.1"
 
 _HUED_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Locate hued-names.sh across install layouts: repo root / manual install
+# (alongside _HUED_DIR) and Homebrew (bin in <prefix>/bin, names in
+# <prefix>/share).
+_HUED_NAMES_FILE="$_HUED_DIR/hued-names.sh"
+[[ -f "$_HUED_NAMES_FILE" ]] || _HUED_NAMES_FILE="$_HUED_DIR/share/hued-names.sh"
 
 _hued_find() {
   local dir="$PWD"
@@ -31,10 +37,9 @@ _hued_normalize_color() {
   fi
 
   # Named color — resolve via hued-names.sh
-  local names_file="$_HUED_DIR/hued-names.sh"
-  if [[ -f "$names_file" ]]; then
+  if [[ -f "$_HUED_NAMES_FILE" ]]; then
     local hex
-    hex=$(grep -m1 "\[${bare}\]=" "$names_file" 2>/dev/null | cut -d= -f2)
+    hex=$(grep -m1 "\[${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null | cut -d= -f2)
     [[ -n "$hex" ]] && printf '%s' "$hex" && return
   fi
 
@@ -98,7 +103,7 @@ _hued_resolve_hex() {
     printf '%s' "${bare:0:1}${bare:0:1}${bare:1:1}${bare:1:1}${bare:2:1}${bare:2:1}"
   else
     local hex
-    hex=$({ grep -m1 "\[${bare}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null || true; } | cut -d= -f2)
+    hex=$({ grep -m1 "\[${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
     printf '%s' "${hex#\#}"
   fi
 }
@@ -361,7 +366,7 @@ PYEOF
     file="$2"
     force=0
     [[ "${3:-}" == "--force" ]] && force=1
-    python3 - "$file" "$force" "$_HUED_DIR/hued-names.sh" <<'PYEOF'
+    python3 - "$file" "$force" "$_HUED_NAMES_FILE" <<'PYEOF'
 import os, json, re, sys
 
 file, force, names_file = sys.argv[1], sys.argv[2] == '1', sys.argv[3]

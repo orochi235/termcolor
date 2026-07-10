@@ -54,6 +54,20 @@ teardown() {
   [[ "$output" == *"${ESC}]11;rgb:1a/0a/0a${BEL}"* ]]
 }
 
+@test "apply: resolves named colors under share/ layout (brew install)" {
+  # Homebrew installs bin/hued to <prefix>/bin and hued-names.sh to
+  # <prefix>/share. _HUED_DIR resolves to <prefix>, so the names file must be
+  # found under share/ too, not just at the repo root.
+  mkdir -p prefix/bin prefix/share
+  cp "$HUED" prefix/bin/hued
+  cp "$BATS_TEST_DIRNAME/../hued-names.sh" prefix/share/hued-names.sh
+  printf 'background=goldenrod\n' > .hued
+  HUED_TTY="$OUT" run "$PWD/prefix/bin/hued" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:da/a5/20${BEL}"* ]]
+}
+
 @test "apply: none resets the channel" {
   printf "background=none\nforeground=#ffffff\n" > .hued
   HUED_TTY="$OUT" run "$HUED" apply
