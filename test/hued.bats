@@ -358,6 +358,41 @@ teardown() {
 
 # --- mod ---
 
+@test "mod bg darken: bare number is percent" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod bg darken 20
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel darken 0.2 '#888888' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg darken: bare fraction is rejected as ambiguous" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  run "$HUED" mod bg darken 0.2
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ambiguous"* ]]
+  [[ "$output" == *"20%"* ]]
+}
+
+@test "mod bg darken: explicit fractional percent is allowed" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod bg darken 0.2%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel darken 0.002 '#888888' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg darken: non-numeric amount fails" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  run "$HUED" mod bg darken banana
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not a number"* ]]
+}
+
 @test "mod: missing channel fails with usage" {
   run "$HUED" mod
   [ "$status" -eq 1 ]
