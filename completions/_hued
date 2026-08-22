@@ -1,5 +1,10 @@
 #compdef hued
 
+_hued_mod_ops() {
+  print -l darken lighten saturate desaturate rotate complement to-gray mix \
+    lightness saturation hue
+}
+
 _hued_colors() {
   local names_file="${HOMEBREW_PREFIX:-/opt/homebrew}/share/hued-names.sh"
   [[ -f "$names_file" ]] || return
@@ -55,7 +60,10 @@ _hued() {
           _describe 'channel' '(bg:"background" fg:"foreground")'
           ;;
         mod)
-          _describe 'channel' '(bg:"background" fg:"foreground")'
+          local ops=("${(@f)$(_hued_mod_ops)}")
+          _alternative \
+            'channels:channel:((bg\:"background" fg\:"foreground"))' \
+            'ops:op:($ops)'
           ;;
       esac
       ;;
@@ -66,7 +74,8 @@ _hued() {
           _describe 'color' colors
           ;;
         mod)
-          _describe 'op' '(darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue)'
+          local ops=("${(@f)$(_hued_mod_ops)}")
+          _describe 'op' ops
           ;;
         pack)
           compadd -- '-o'

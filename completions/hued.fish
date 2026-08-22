@@ -22,7 +22,7 @@ complete -c hued -n "__fish_seen_subcommand_from unset; and not __fish_seen_subc
 complete -c hued -n "__fish_seen_subcommand_from unset; and not __fish_seen_subcommand_from bg fg" -a "fg" -d "Foreground channel"
 complete -c hued -n "__fish_seen_subcommand_from mod; and not __fish_seen_subcommand_from bg fg" -a "bg" -d "Background channel"
 complete -c hued -n "__fish_seen_subcommand_from mod; and not __fish_seen_subcommand_from bg fg" -a "fg" -d "Foreground channel"
-complete -c hued -n "__fish_seen_subcommand_from mod; and __fish_seen_subcommand_from bg fg; and not __fish_seen_subcommand_from $mod_ops" -a "$mod_ops"
+complete -c hued -n "__fish_seen_subcommand_from mod; and not __fish_seen_subcommand_from $mod_ops" -a "$mod_ops"
 
 complete -c hued -n "__fish_seen_subcommand_from pack"   -a "(__fish_complete_directories)"
 complete -c hued -n "__fish_seen_subcommand_from pack"   -a "-o" -d "Output file"

@@ -43,6 +43,13 @@ _complete() {
   [[ "${COMPREPLY[*]}" == *"fg"* ]]
 }
 
+@test "mod: suggests transform ops without a channel" {
+  _complete hued mod ""
+  [[ "${COMPREPLY[*]}" == *"darken"* ]]
+  [[ "${COMPREPLY[*]}" == *"lightness"* ]]
+  [[ "${COMPREPLY[*]}" == *"to-gray"* ]]
+}
+
 @test "mod bg: suggests transform ops" {
   _complete hued mod bg ""
   [[ "${COMPREPLY[*]}" == *"darken"* ]]
@@ -110,11 +117,11 @@ _complete() {
 
 @test "completions: all three shells list the new HSL ops" {
   for f in completions/hued.bash completions/hued.fish completions/_hued; do
-    grep -q "lightness" "$BATS_TEST_DIRNAME/../$f" || {
+    grep -qE '(^| )lightness( |$|")' "$BATS_TEST_DIRNAME/../$f" || {
       echo "missing lightness in $f"; return 1; }
-    grep -q "saturation" "$BATS_TEST_DIRNAME/../$f" || {
+    grep -qE '(^| )saturation( |$|")' "$BATS_TEST_DIRNAME/../$f" || {
       echo "missing saturation in $f"; return 1; }
-    grep -q "hue" "$BATS_TEST_DIRNAME/../$f" || {
+    grep -qE '(^| )hue( |$|")' "$BATS_TEST_DIRNAME/../$f" || {
       echo "missing hue in $f"; return 1; }
   done
 }

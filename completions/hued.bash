@@ -1,9 +1,10 @@
 _hued_completion() {
-  local cur prev pprev names_file
+  local cur prev pprev names_file mod_ops
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   pprev="${COMP_WORDS[COMP_CWORD-2]:-}"
   names_file="${HOMEBREW_PREFIX:-/opt/homebrew}/share/hued-names.sh"
+  mod_ops="darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue"
   COMPREPLY=()
 
   if [[ $COMP_CWORD -eq 1 ]]; then
@@ -13,9 +14,9 @@ _hued_completion() {
   elif [[ $prev == "unset" ]]; then
     mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
   elif [[ $prev == "mod" ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "bg fg $mod_ops" -- "$cur")
   elif [[ "$pprev" == "mod" && ( "$prev" == "bg" || "$prev" == "fg" ) ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "$mod_ops" -- "$cur")
   elif [[ $prev == "resolve" ]]; then
     if [[ -f "$names_file" ]]; then
       mapfile -t COMPREPLY < <(
