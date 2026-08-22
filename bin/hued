@@ -46,9 +46,12 @@ _hued_normalize_color() {
 
   # Named color — resolve via hued-names.sh
   if [[ -f "$_HUED_NAMES_FILE" ]]; then
-    local key hex
+    local key hex=""
     key=$(_hued_name_key "$bare")
-    hex=$({ grep -m1 "\[${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+    if [[ "${_HUED_XKCD:-0}" == "1" ]]; then
+      hex=$({ grep -m1 "\[xkcd:${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+    fi
+    [[ -n "$hex" ]] || hex=$({ grep -m1 "\[${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
     [[ -n "$hex" ]] && printf '%s' "$hex" && return
   fi
 
@@ -222,8 +225,11 @@ _hued_resolve_hex() {
   elif [[ "$bare" =~ ^[0-9a-f]{3}$ ]]; then
     printf '%s' "${bare:0:1}${bare:0:1}${bare:1:1}${bare:1:1}${bare:2:1}${bare:2:1}"
   else
-    local hex
-    hex=$({ grep -m1 "\[${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+    local hex=""
+    if [[ "${_HUED_XKCD:-0}" == "1" ]]; then
+      hex=$({ grep -m1 "\[xkcd:${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+    fi
+    [[ -n "$hex" ]] || hex=$({ grep -m1 "\[${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
     printf '%s' "${hex#\#}"
   fi
 }
@@ -273,6 +279,17 @@ _hued_apply_cmd() {
   _hued_emit_osc "$bg" "$fg" >&3
   exec 3>&-
 }
+
+# A bare -n test would make HUED_LOOKUP_PREFER_XKCD=0 mean "on".
+_HUED_XKCD=0
+case "$(printf '%s' "${HUED_LOOKUP_PREFER_XKCD:-}" | tr '[:upper:]' '[:lower:]')" in
+  ""|0|false|no) ;;
+  *) _HUED_XKCD=1 ;;
+esac
+if [[ "${1:-}" == "-x" || "${1:-}" == "--xkcd" ]]; then
+  _HUED_XKCD=1
+  shift
+fi
 
 case "${1:-}" in
   "")
@@ -552,7 +569,7 @@ PYEOF
     ;;
 
   *)
-    echo "Usage: hued [where | get [bg|fg] | set [bg|fg] <color> | unset [bg|fg] | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
+    echo "Usage: hued [-x] [where | get [bg|fg] | set [bg|fg] <color> | unset [bg|fg] | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
     exit 1
     ;;
 esac

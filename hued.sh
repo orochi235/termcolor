@@ -14,16 +14,26 @@ else
   _HUED_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-declare -A _HUED_NAMES
+# -g: sourcing this file from inside a function would otherwise scope the
+# cache locally, and it would silently degrade to an indexed array.
+declare -gA _HUED_NAMES
 
+# The cache key carries the prefix so toggling HUED_LOOKUP_PREFER_XKCD
+# mid-session does not serve a stale hit.
 _hued_lookup() {
-  local key="$1"
-  if [[ -z "${_HUED_NAMES[$key]+_}" ]]; then
-    local hit
-    hit=$(grep -m1 "\[${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
-    _HUED_NAMES[$key]="${hit:-__miss__}"
+  local key="$1" prefix="" cache_key
+  case "$(printf '%s' "${HUED_LOOKUP_PREFER_XKCD:-}" | tr '[:upper:]' '[:lower:]')" in
+    ""|0|false|no) ;;
+    *) prefix="xkcd:" ;;
+  esac
+  cache_key="${prefix}${key}"
+  if [[ -z "${_HUED_NAMES[$cache_key]+_}" ]]; then
+    local hit=""
+    [[ -n "$prefix" ]] && hit=$(grep -m1 "\[${prefix}${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+    [[ -n "$hit" ]] || hit=$(grep -m1 "\[${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+    _HUED_NAMES[$cache_key]="${hit:-__miss__}"
   fi
-  local val="${_HUED_NAMES[$key]}"
+  local val="${_HUED_NAMES[$cache_key]}"
   [[ "$val" != "__miss__" ]] && printf '%s' "$val"
 }
 

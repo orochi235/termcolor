@@ -12,7 +12,13 @@ function _hued_apply_channel --argument-names osc reset_osc value
     end
     set hex (string replace '#' '' -- "$value")
     if not string match -qr '^[0-9a-f]{6}$' -- "$hex"
-        set hit (grep -m1 "\[$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+        set hit ""
+        if not string match -qir '^(|0|false|no)$' -- "$HUED_LOOKUP_PREFER_XKCD"
+            set hit (grep -m1 "\[xkcd:$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+        end
+        if test -z "$hit"
+            set hit (grep -m1 "\[$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+        end
         set hex (string replace '#' '' -- "$hit")
     end
     if string match -qr '^[0-9a-f]{6}$' -- "$hex"

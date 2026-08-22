@@ -99,6 +99,32 @@ fish_apply() {
   [[ "$output" == *"${ESC}]11;rgb:19/19/70${BEL}"* ]]
 }
 
+# --- HUED_LOOKUP_PREFER_XKCD ---
+
+@test "HUED_LOOKUP_PREFER_XKCD prefers the xkcd value for a shared name" {
+  printf "background=red\n" > .hued
+  run fish_apply HUED_LOOKUP_PREFER_XKCD=1
+  [[ "$output" == *"${ESC}]11;rgb:e5/00/00${BEL}"* ]]
+}
+
+@test "without HUED_LOOKUP_PREFER_XKCD a shared name resolves to CSS" {
+  printf "background=red\n" > .hued
+  run fish_apply
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD=0 is off, not on" {
+  printf "background=red\n" > .hued
+  run fish_apply HUED_LOOKUP_PREFER_XKCD=0
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD: an xkcd-only name resolves the same either way" {
+  printf "background=emerald\n" > .hued
+  run fish_apply HUED_LOOKUP_PREFER_XKCD=1
+  [[ "$output" == *"${ESC}]11;rgb:01/a0/49${BEL}"* ]]
+}
+
 # --- 'none' sentinel ---
 
 @test "env bg=none: resets bg even when file sets it" {

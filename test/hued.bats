@@ -275,6 +275,59 @@ teardown() {
   [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "gray50" ]]
 }
 
+# --- -x / HUED_LOOKUP_PREFER_XKCD ---
+
+@test "-x: prefers the xkcd value for a shared name" {
+  "$HUED" -x set red
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#e50000" ]]
+}
+
+@test "-x: leaves xkcd-only names unchanged" {
+  "$HUED" -x set emerald
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#01a049" ]]
+}
+
+@test "no -x: uses the CSS value" {
+  "$HUED" set red
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#ff0000" ]]
+}
+
+@test "-x: works before any subcommand" {
+  printf "background=#888888\n" > .hued
+  run "$HUED" -x where
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"/.hued" ]]
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD: set to 1 prefers the xkcd value" {
+  HUED_LOOKUP_PREFER_XKCD=1 "$HUED" set red
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#e50000" ]]
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD: off values are treated as off" {
+  for off in "" 0 false no FALSE No; do
+    rm -f .hued
+    HUED_LOOKUP_PREFER_XKCD="$off" "$HUED" set red
+    got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+    [[ "$got" == "#ff0000" ]] || { echo "HUED_LOOKUP_PREFER_XKCD=$off gave $got, want #ff0000"; return 1; }
+  done
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD: arbitrary truthy values are treated as on" {
+  for on in 1 true yes on TRUE; do
+    rm -f .hued
+    HUED_LOOKUP_PREFER_XKCD="$on" "$HUED" set red
+    got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+    [[ "$got" == "#e50000" ]] || { echo "HUED_LOOKUP_PREFER_XKCD=$on gave $got, want #e50000"; return 1; }
+  done
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD: -x still works when the variable is unset" {
+  unset HUED_LOOKUP_PREFER_XKCD
+  "$HUED" -x set red
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#e50000" ]]
+}
+
 # --- get ---
 
 @test "get: missing channel fails with usage" {

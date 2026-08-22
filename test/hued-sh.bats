@@ -11,7 +11,7 @@ FG_RESET="${ESC}]110;${BEL}"
 setup() {
   TMPDIR="$(mktemp -d)"
   cd "$TMPDIR"
-  unset HUED_BACKGROUND HUED_FOREGROUND
+  unset HUED_BACKGROUND HUED_FOREGROUND HUED_LOOKUP_PREFER_XKCD
   # shellcheck disable=SC1090
   source "$HUED_SH"
 }
@@ -114,6 +114,41 @@ teardown() {
 @test "env none is case-insensitive" {
   HUED_BACKGROUND="None" run _hued_apply_fallback
   [[ "$output" == *"$BG_RESET"* ]]
+}
+
+# --- HUED_LOOKUP_PREFER_XKCD ---
+
+@test "HUED_LOOKUP_PREFER_XKCD prefers the xkcd value for a shared name" {
+  printf "background=red\n" > .hued
+  HUED_LOOKUP_PREFER_XKCD=1 run _hued_apply_fallback
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"${ESC}]11;rgb:e5/00/00${BEL}"* ]]
+}
+
+@test "without HUED_LOOKUP_PREFER_XKCD a shared name resolves to CSS" {
+  printf "background=red\n" > .hued
+  run _hued_apply_fallback
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD=0 is off, not on" {
+  printf "background=red\n" > .hued
+  HUED_LOOKUP_PREFER_XKCD=0 run _hued_apply_fallback
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+}
+
+@test "HUED_LOOKUP_PREFER_XKCD: an xkcd-only name resolves the same either way" {
+  printf "background=emerald\n" > .hued
+  HUED_LOOKUP_PREFER_XKCD=1 run _hued_apply_fallback
+  [[ "$output" == *"${ESC}]11;rgb:01/a0/49${BEL}"* ]]
+}
+
+@test "the name cache is not shared across HUED_LOOKUP_PREFER_XKCD modes" {
+  printf "background=red\n" > .hued
+  output="$(_hued_apply_fallback; HUED_LOOKUP_PREFER_XKCD=1 _hued_apply_fallback)"
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+  [[ "$output" == *"${ESC}]11;rgb:e5/00/00${BEL}"* ]]
 }
 
 # --- dispatcher: delegate vs fallback ---
