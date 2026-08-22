@@ -12,12 +12,18 @@ function _hued_apply_channel --argument-names osc reset_osc value
     end
     set hex (string replace '#' '' -- "$value")
     if not string match -qr '^[0-9a-f]{6}$' -- "$hex"
+        # Strip spaces, hyphens and apostrophes to match the key normalization
+        # in scripts/generate-names.py, then reject anything outside the
+        # generated alphabet so a regex metacharacter cannot match another row.
+        set -l key (string replace -ra "[ '’-]" '' -- "$hex")
         set hit ""
-        if not string match -qir '^(|0|false|no)$' -- "$HUED_LOOKUP_PREFER_XKCD"
-            set hit (grep -m1 "\[xkcd:$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
-        end
-        if test -z "$hit"
-            set hit (grep -m1 "\[$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+        if string match -qr '^[a-z0-9/]+$' -- "$key"
+            if not string match -qir '^(|0|false|no|off|n)$' -- "$HUED_LOOKUP_PREFER_XKCD"
+                set hit (grep -m1 "\[xkcd:$key\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+            end
+            if test -z "$hit"
+                set hit (grep -m1 "\[$key\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+            end
         end
         set hex (string replace '#' '' -- "$hit")
     end

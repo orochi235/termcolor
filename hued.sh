@@ -14,37 +14,36 @@ else
   _HUED_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-# -g: sourcing this file from inside a function would otherwise scope the
-# cache locally, and it would silently degrade to an indexed array.
-declare -gA _HUED_NAMES
+# Lowercase and strip spaces, hyphens and apostrophes, matching the key
+# normalization in scripts/generate-names.py.
+_hued_name_key() {
+  local k="$1"
+  k="${k// /}"; k="${k//-/}"; k="${k//\'/}"; k="${k//’/}"
+  printf '%s' "$k" | tr '[:upper:]' '[:lower:]'
+}
 
-# The cache key carries the prefix so toggling HUED_LOOKUP_PREFER_XKCD
-# mid-session does not serve a stale hit.
+# Keys outside the generated alphabet are rejected before the grep so a name
+# containing a regex metacharacter cannot match some unrelated row.
 _hued_lookup() {
-  local key="$1" prefix="" cache_key
+  local key="$1" prefix="" hit=""
+  [[ "$key" =~ ^[a-z0-9/]+$ ]] || return 0
   case "$(printf '%s' "${HUED_LOOKUP_PREFER_XKCD:-}" | tr '[:upper:]' '[:lower:]')" in
-    ""|0|false|no) ;;
+    ""|0|false|no|off|n) ;;
     *) prefix="xkcd:" ;;
   esac
-  cache_key="${prefix}${key}"
-  if [[ -z "${_HUED_NAMES[$cache_key]+_}" ]]; then
-    local hit=""
-    [[ -n "$prefix" ]] && hit=$(grep -m1 "\[${prefix}${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
-    [[ -n "$hit" ]] || hit=$(grep -m1 "\[${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
-    _HUED_NAMES[$cache_key]="${hit:-__miss__}"
+  if [[ -n "$prefix" ]]; then
+    hit=$(grep -m1 "\[${prefix}${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
   fi
-  local val="${_HUED_NAMES[$cache_key]}"
-  [[ "$val" != "__miss__" ]] && printf '%s' "$val"
+  [[ -n "$hit" ]] || hit=$(grep -m1 "\[${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+  printf '%s' "$hit"
 }
 
 _hued_resolve() {
-  local value="$1"
-  local key="${value#\#}"
-  key="${key// /}"
+  local value="$1" key hex
+  key=$(_hued_name_key "${value#\#}")
   if [[ "$key" =~ ^[0-9a-f]{6}$ ]]; then
     printf '%s' "$key"
   else
-    local hex
     hex="$(_hued_lookup "$key")"
     printf '%s' "${hex#\#}"
   fi

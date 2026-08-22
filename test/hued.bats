@@ -275,6 +275,20 @@ teardown() {
   [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "gray50" ]]
 }
 
+@test "names: a name with regex metacharacters passes through literally" {
+  for name in '.*' 'g.ay' '*' '[a-z]'; do
+    rm -f .hued
+    "$HUED" set "$name"
+    got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+    [[ "$got" == "$name" ]] || { echo "set '$name' wrote '$got'"; return 1; }
+  done
+}
+
+@test "names: a hyphenated name resolves like its unspaced spelling" {
+  "$HUED" set baby-blue
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#a2cffe" ]]
+}
+
 # --- -x / HUED_LOOKUP_PREFER_XKCD ---
 
 @test "-x: prefers the xkcd value for a shared name" {
@@ -305,7 +319,7 @@ teardown() {
 }
 
 @test "HUED_LOOKUP_PREFER_XKCD: off values are treated as off" {
-  for off in "" 0 false no FALSE No; do
+  for off in "" 0 false no off n FALSE No OFF N; do
     rm -f .hued
     HUED_LOOKUP_PREFER_XKCD="$off" "$HUED" set red
     got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')

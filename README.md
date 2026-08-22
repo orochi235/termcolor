@@ -187,9 +187,9 @@ repaint anytime with `hued apply` — handy after editing a `.hued` by hand.
 
 `HUED_LOOKUP_PREFER_XKCD` is the standing form of `-x`: export it and every
 lookup — CLI and prompt hook alike — prefers xkcd's value for the 92 names the
-two lists disagree on. It is off when unset, empty, `0`, `false` or `no`
-(any case) and on for anything else; unlike hued's other variables, `=0` really
-does mean off. `-x` cannot turn it back off, so clear it for one command to get
+two lists disagree on. It is off when unset, empty, `0`, `n`, `no`,
+`off` or `false` (any case) and on for anything else; unlike hued's other
+variables, `=0` really does mean off. `-x` cannot turn it back off, so clear it for one command to get
 the CSS reading:
 
 ```bash

@@ -10,7 +10,7 @@ FG_RESET="${ESC}]110;${BEL}"
 setup() {
   TMPDIR="$(mktemp -d)"
   cd "$TMPDIR"
-  unset HUED_BACKGROUND HUED_FOREGROUND
+  unset HUED_BACKGROUND HUED_FOREGROUND HUED_LOOKUP_PREFER_XKCD
   OUT="$TMPDIR/tty.out"
 }
 
@@ -108,6 +108,79 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   [ ! -e "$TMPDIR/nope/tty.out" ]
+}
+
+# --- name normalization ---
+
+@test "apply: resolves a hyphenated name from .hued" {
+  printf "background=baby-blue\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:a2/cf/fe${BEL}"* ]]
+}
+
+@test "apply: resolves a hyphenated HUED_BACKGROUND" {
+  HUED_TTY="$OUT" HUED_BACKGROUND="baby-blue" run "$HUED" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:a2/cf/fe${BEL}"* ]]
+}
+
+@test "apply: a name with regex metacharacters resolves to nothing" {
+  printf "background=.*\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" != *"${ESC}]11;rgb:"* ]]
+}
+
+# --- -x / HUED_LOOKUP_PREFER_XKCD on the apply path ---
+
+@test "apply: -x prefers the xkcd value for a shared name" {
+  printf "background=red\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" -x apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:e5/00/00${BEL}"* ]]
+}
+
+@test "apply: HUED_LOOKUP_PREFER_XKCD=1 prefers the xkcd value" {
+  printf "background=red\n" > .hued
+  HUED_TTY="$OUT" HUED_LOOKUP_PREFER_XKCD=1 run "$HUED" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:e5/00/00${BEL}"* ]]
+}
+
+@test "apply: without -x a shared name resolves to CSS" {
+  printf "background=red\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" apply
+  [ "$status" -eq 0 ]
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+}
+
+@test "apply: HUED_LOOKUP_PREFER_XKCD off values are off (0 included)" {
+  printf "background=red\n" > .hued
+  for off in "" 0 false no off n FALSE No OFF N; do
+    : > "$OUT"
+    HUED_TTY="$OUT" HUED_LOOKUP_PREFER_XKCD="$off" "$HUED" apply
+    got="$(cat "$OUT")"
+    [[ "$got" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]] || {
+      echo "HUED_LOOKUP_PREFER_XKCD=$off did not resolve red to CSS"; return 1; }
+  done
+}
+
+@test "apply: -x leaves an xkcd-only name unchanged" {
+  printf "background=emerald\n" > .hued
+  HUED_TTY="$OUT" run "$HUED" -x apply
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:01/a0/49${BEL}"* ]]
+  : > "$OUT"
+  HUED_TTY="$OUT" run "$HUED" apply
+  run cat "$OUT"
+  [[ "$output" == *"${ESC}]11;rgb:01/a0/49${BEL}"* ]]
 }
 
 # --- mutating commands repaint after writing ---

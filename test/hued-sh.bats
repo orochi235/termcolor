@@ -132,23 +132,40 @@ teardown() {
   [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
 }
 
-@test "HUED_LOOKUP_PREFER_XKCD=0 is off, not on" {
+@test "HUED_LOOKUP_PREFER_XKCD: off values are off (0 included)" {
   printf "background=red\n" > .hued
-  HUED_LOOKUP_PREFER_XKCD=0 run _hued_apply_fallback
-  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
+  for off in "" 0 false no off n FALSE No OFF N; do
+    HUED_LOOKUP_PREFER_XKCD="$off" run _hued_apply_fallback
+    [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]] || {
+      echo "HUED_LOOKUP_PREFER_XKCD=$off did not resolve red to CSS"; return 1; }
+  done
 }
 
 @test "HUED_LOOKUP_PREFER_XKCD: an xkcd-only name resolves the same either way" {
   printf "background=emerald\n" > .hued
   HUED_LOOKUP_PREFER_XKCD=1 run _hued_apply_fallback
   [[ "$output" == *"${ESC}]11;rgb:01/a0/49${BEL}"* ]]
+  run _hued_apply_fallback
+  [[ "$output" == *"${ESC}]11;rgb:01/a0/49${BEL}"* ]]
 }
 
-@test "the name cache is not shared across HUED_LOOKUP_PREFER_XKCD modes" {
-  printf "background=red\n" > .hued
-  output="$(_hued_apply_fallback; HUED_LOOKUP_PREFER_XKCD=1 _hued_apply_fallback)"
-  [[ "$output" == *"${ESC}]11;rgb:ff/00/00${BEL}"* ]]
-  [[ "$output" == *"${ESC}]11;rgb:e5/00/00${BEL}"* ]]
+# --- name normalization ---
+
+@test "a hyphenated name in .hued resolves" {
+  printf "background=baby-blue\n" > .hued
+  run _hued_apply_fallback
+  [[ "$output" == *"${ESC}]11;rgb:a2/cf/fe${BEL}"* ]]
+}
+
+@test "a hyphenated HUED_BACKGROUND resolves" {
+  HUED_BACKGROUND="baby-blue" run _hued_apply_fallback
+  [[ "$output" == *"${ESC}]11;rgb:a2/cf/fe${BEL}"* ]]
+}
+
+@test "a name with regex metacharacters resolves to nothing" {
+  printf "background=.*\n" > .hued
+  run _hued_apply_fallback
+  [[ "$output" != *"${ESC}]11;rgb:"* ]]
 }
 
 # --- dispatcher: delegate vs fallback ---

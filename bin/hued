@@ -30,6 +30,20 @@ _hued_name_key() {
   printf '%s' "${k,,}"
 }
 
+# Look up a normalized name key in hued-names.sh, printing #rrggbb or nothing.
+# Keys outside the generated alphabet are rejected before the grep so a name
+# containing a regex metacharacter cannot match some unrelated row.
+_hued_lookup_name() {
+  local key="$1" hex=""
+  [[ "$key" =~ ^[a-z0-9/]+$ ]] || return 0
+  [[ -f "$_HUED_NAMES_FILE" ]] || return 0
+  if [[ "${_HUED_XKCD:-0}" == "1" ]]; then
+    hex=$({ grep -m1 "\[xkcd:${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+  fi
+  [[ -n "$hex" ]] || hex=$({ grep -m1 "\[${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+  printf '%s' "$hex"
+}
+
 _hued_normalize_color() {
   local bare="${1#\#}"
 
@@ -45,15 +59,9 @@ _hued_normalize_color() {
   fi
 
   # Named color — resolve via hued-names.sh
-  if [[ -f "$_HUED_NAMES_FILE" ]]; then
-    local key hex=""
-    key=$(_hued_name_key "$bare")
-    if [[ "${_HUED_XKCD:-0}" == "1" ]]; then
-      hex=$({ grep -m1 "\[xkcd:${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
-    fi
-    [[ -n "$hex" ]] || hex=$({ grep -m1 "\[${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
-    [[ -n "$hex" ]] && printf '%s' "$hex" && return
-  fi
+  local hex
+  hex=$(_hued_lookup_name "$(_hued_name_key "$bare")")
+  [[ -n "$hex" ]] && printf '%s' "$hex" && return
 
   printf '%s' "$1"
 }
@@ -197,7 +205,7 @@ _hued_set_key() {
   local key="$1" raw="$2" color line
   color="$(_hued_normalize_color "$raw")"
   line="${key}=${color}"
-  # If the input was a recognized X11 name (not hex/none) that resolved to
+  # If the input was a recognized color name (not hex/none) that resolved to
   # #rrggbb, keep the original name as an inline comment for humans.
   local bare="${raw#\#}"
   if [[ ! "$bare" =~ ^[0-9a-fA-F]{3}$ && ! "$bare" =~ ^[0-9a-fA-F]{6}$ \
@@ -214,22 +222,16 @@ _hued_set_key() {
   echo "Set ${key} to ${color} in ${PWD}/.hued"
 }
 
-# Resolve a color value (6-hex, 3-hex shorthand, or X11 name) to bare rrggbb.
-# Prints an empty string if it cannot be resolved.
 _hued_resolve_hex() {
-  local bare="${1#\#}"
-  bare="${bare// /}"
-  bare="${bare,,}"
+  local bare
+  bare=$(_hued_name_key "${1#\#}")
   if [[ "$bare" =~ ^[0-9a-f]{6}$ ]]; then
     printf '%s' "$bare"
   elif [[ "$bare" =~ ^[0-9a-f]{3}$ ]]; then
     printf '%s' "${bare:0:1}${bare:0:1}${bare:1:1}${bare:1:1}${bare:2:1}${bare:2:1}"
   else
-    local hex=""
-    if [[ "${_HUED_XKCD:-0}" == "1" ]]; then
-      hex=$({ grep -m1 "\[xkcd:${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
-    fi
-    [[ -n "$hex" ]] || hex=$({ grep -m1 "\[${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
+    local hex
+    hex=$(_hued_lookup_name "$bare")
     printf '%s' "${hex#\#}"
   fi
 }
@@ -312,7 +314,7 @@ _hued_apply_cmd() {
 # A bare -n test would make HUED_LOOKUP_PREFER_XKCD=0 mean "on".
 _HUED_XKCD=0
 case "$(printf '%s' "${HUED_LOOKUP_PREFER_XKCD:-}" | tr '[:upper:]' '[:lower:]')" in
-  ""|0|false|no) ;;
+  ""|0|false|no|off|n) ;;
   *) _HUED_XKCD=1 ;;
 esac
 if [[ "${1:-}" == "-x" || "${1:-}" == "--xkcd" ]]; then
@@ -525,7 +527,7 @@ import os, json, re, sys
 
 file, force, names_file = sys.argv[1], sys.argv[2] == '1', sys.argv[3]
 
-# Load X11 name -> #rrggbb map from hued-names.sh so packed configs that
+# Load the name -> #rrggbb map from hued-names.sh so packed configs that
 # carry named colors get normalized to hex on unpack.
 names = {}
 try:
@@ -537,6 +539,9 @@ try:
 except OSError:
     pass
 
+def name_key(name):
+    return re.sub(r"[ \-'\u2019]", '', name.lower())
+
 def normalize(value):
     """Return (hex_or_original, original_name_or_None)."""
     v = value.split()[0] if value.split() else value
@@ -547,7 +552,7 @@ def normalize(value):
         return '#' + bare.lower(), None
     if v.lower() == 'none':
         return 'none', None
-    hexv = names.get(v)
+    hexv = names.get(name_key(v))
     if hexv:
         return hexv, v
     return v, None
