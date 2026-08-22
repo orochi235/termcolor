@@ -399,10 +399,10 @@ teardown() {
   [[ "$output" == *"Usage: hued mod"* ]]
 }
 
-@test "mod: invalid channel fails" {
-  run "$HUED" mod xyz darken 0.2
+@test "mod: invalid channel is treated as an unknown op" {
+  run "$HUED" mod xyz darken 20%
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Usage: hued mod"* ]]
+  [[ "$output" == *"unknown op"* ]]
 }
 
 @test "mod bg: missing op fails with usage" {
@@ -415,7 +415,7 @@ teardown() {
 @test "mod bg: fails when channel not set" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "foreground=#ffffff\n" > .hued
-  run "$HUED" mod bg darken 0.2
+  run "$HUED" mod bg darken 20%
   [ "$status" -eq 1 ]
   [[ "$output" == *"background not set"* ]]
 }
@@ -423,7 +423,7 @@ teardown() {
 @test "mod bg: unknown op fails" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#888888\n" > .hued
-  run "$HUED" mod bg frobnicate 0.2
+  run "$HUED" mod bg frobnicate 20%
   [ "$status" -eq 1 ]
   [[ "$output" == *"unknown op"* ]]
 }
@@ -433,13 +433,13 @@ teardown() {
   printf "background=#888888\n" > .hued
   run "$HUED" mod bg darken
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Usage:"* ]]
+  [[ "$output" == *"requires an amount"* ]]
 }
 
-@test "mod bg darken: 0.2 darkens the background" {
+@test "mod bg darken: 20% darkens the background" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#888888\n" > .hued
-  run "$HUED" mod bg darken 0.2
+  run "$HUED" mod bg darken 20%
   [ "$status" -eq 0 ]
   new=$(grep ^background= .hued | cut -d= -f2)
   expected=$(pastel darken 0.2 '#888888' | pastel format hex)
@@ -458,7 +458,7 @@ teardown() {
 @test "mod fg lighten: works on foreground" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "foreground=#222222\n" > .hued
-  "$HUED" mod fg lighten 0.1
+  "$HUED" mod fg lighten 10%
   new=$(grep ^foreground= .hued | cut -d= -f2)
   expected=$(pastel lighten 0.1 '#222222' | pastel format hex)
   [[ "$new" == "$expected" ]]
@@ -476,7 +476,7 @@ teardown() {
 @test "mod bg desaturate: applies desaturate" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#ff0000\n" > .hued
-  "$HUED" mod bg desaturate 0.5
+  "$HUED" mod bg desaturate 50%
   new=$(grep ^background= .hued | cut -d= -f2)
   expected=$(pastel desaturate 0.5 '#ff0000' | pastel format hex)
   [[ "$new" == "$expected" ]]
@@ -556,7 +556,7 @@ teardown() {
 @test "mod bg mix: accepts explicit ratio" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#ff0000\n" > .hued
-  "$HUED" mod bg mix '#0000ff' 0.25
+  "$HUED" mod bg mix '#0000ff' 25%
   new=$(grep ^background= .hued | cut -d= -f2)
   expected=$(pastel mix --fraction 0.25 '#0000ff' '#ff0000' | pastel format hex)
   [[ "$new" == "$expected" ]]
@@ -652,7 +652,7 @@ teardown() {
 @test "mod bg: fails when pastel not installed" {
   command -v pastel >/dev/null 2>&1 && skip "pastel is installed"
   printf "background=#ff0000\n" > .hued
-  run "$HUED" mod bg darken 0.2
+  run "$HUED" mod bg darken 20%
   [ "$status" -eq 1 ]
   [[ "$output" == *"requires 'pastel'"* ]]
 }
