@@ -412,6 +412,33 @@ teardown() {
   [[ "$output" == *"requires 'pastel'"* ]]
 }
 
+@test "get --name: names an exact hex" {
+  printf "background=#01a049\n" > .hued
+  run "$HUED" get bg --name
+  [ "$status" -eq 0 ]
+  [[ "$output" == "emerald" ]]
+}
+
+@test "get --name: names the nearest color for an inexact hex" {
+  printf "background=#01a04a\n" > .hued
+  run "$HUED" get bg --name
+  [ "$status" -eq 0 ]
+  [[ "$output" == "emerald" ]]
+}
+
+@test "get --name: -x prefers an xkcd reading" {
+  printf "background=#e50000\n" > .hued
+  run "$HUED" -x get bg --name
+  [ "$status" -eq 0 ]
+  [[ "$output" == "red" ]]
+}
+
+@test "get --name: fails when the channel is unset" {
+  printf "foreground=#ffffff\n" > .hued
+  run "$HUED" get bg --name
+  [ "$status" -eq 1 ]
+}
+
 # --- set: stdin piping ---
 
 @test "set bg: reads color from stdin when no arg" {

@@ -234,6 +234,35 @@ _hued_resolve_hex() {
   fi
 }
 
+# Print the nearest name for a bare rrggbb, or nothing if the list is missing.
+_hued_nearest_name() {
+  local hex="$1"
+  [[ -f "$_HUED_NAMES_FILE" ]] || return 1
+  python3 - "$hex" "$_HUED_NAMES_FILE" "${_HUED_XKCD:-0}" <<'PYEOF'
+import re, sys
+
+hexv, names_file, prefer_xkcd = sys.argv[1], sys.argv[2], sys.argv[3] == '1'
+
+plain, override = {}, {}
+with open(names_file) as f:
+    for line in f:
+        m = re.match(r'\s*\[(?:(xkcd):)?([^\]]+)\]=#([0-9a-f]{6})', line)
+        if m:
+            (override if m.group(1) else plain)[m.group(2)] = m.group(3)
+if prefer_xkcd:
+    plain.update(override)
+
+target = tuple(int(hexv[i:i+2], 16) for i in (0, 2, 4))
+best, best_d = '', None
+for name, h in plain.items():
+    c = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+    d = sum((a - b) ** 2 for a, b in zip(c, target))
+    if best_d is None or d < best_d:
+        best, best_d = name, d
+print(best)
+PYEOF
+}
+
 # Emit OSC 10/11 escapes for the given bg/fg values to stdout.
 # Empty value -> reset escape for that channel.
 _hued_emit_osc() {
@@ -323,11 +352,18 @@ case "${1:-}" in
     case "${2:-}" in
       bg|background) key="background" ;;
       fg|foreground) key="foreground" ;;
-      *) echo "Usage: hued get [bg|fg]" >&2; exit 1 ;;
+      *) echo "Usage: hued get [bg|fg] [--name]" >&2; exit 1 ;;
     esac
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
     raw=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | awk '{print $1}')
     [[ -z "$raw" ]] && exit 1
+    # Ahead of the pastel check: reverse lookup is pure Python.
+    if [[ "${3:-}" == "--name" ]]; then
+      hex=$(_hued_resolve_hex "$raw")
+      [[ -z "$hex" ]] && { echo "hued get: cannot resolve ${raw}" >&2; exit 1; }
+      _hued_nearest_name "$hex"
+      exit 0
+    fi
     command -v pastel >/dev/null 2>&1 || {
       echo "hued get: requires 'pastel' (brew install pastel)" >&2
       exit 1
@@ -569,7 +605,7 @@ PYEOF
     ;;
 
   *)
-    echo "Usage: hued [-x] [where | get [bg|fg] | set [bg|fg] <color> | unset [bg|fg] | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
+    echo "Usage: hued [-x] [where | get [bg|fg] [--name] | set [bg|fg] <color> | unset [bg|fg] | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
     exit 1
     ;;
 esac
