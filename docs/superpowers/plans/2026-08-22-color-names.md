@@ -17,7 +17,8 @@
 - Create: `scripts/generate-names.py` — the single generator, emitting both outputs.
 - Delete: `scripts/generate-names.sh` (X11 fetcher), `scripts/names_to_py.py` (dead; its input `src/picker/lib/names.ts` does not exist on `main`).
 - Regenerate: `hued-names.sh`, `src/picker/names.py`.
-- Modify: `bin/hued` — global `-x` pre-parse, `_hued_resolve_hex`, `_hued_normalize_color`, `hued get --name`, `-i` passthrough.
+- Modify: `bin/hued` — global `-x` pre-parse plus `HUED_XKCD`, `_hued_resolve_hex`, `_hued_normalize_color`, `hued get --name`, `-i` passthrough.
+- Modify: `hued.sh`, `hued.fish` — the prompt hooks honor `HUED_XKCD` when resolving names.
 - Modify: `src/picker/app.py` — `--xkcd` flag and a module-level palette.
 - Modify: `Makefile` — point `color-names` at the new generator.
 - Modify: `README.md` — document `-x`, `--name`, and the new vocabulary.
@@ -417,11 +418,13 @@ git commit -m "test(names): cover the CSS+xkcd vocabulary and generator agreemen
 
 ---
 
-## Task 4: The `-x` flag in `bin/hued`
+## Task 4: The `-x` flag and `HUED_XKCD`
 
 **Files:**
 - Modify: `bin/hued` — add the pre-parse before the dispatcher `case`, and update `_hued_normalize_color` and `_hued_resolve_hex`
-- Test: `test/hued.bats`
+- Modify: `hued.sh` — `_hued_lookup` honors `HUED_XKCD`, cache key includes the mode
+- Modify: `hued.fish` — `_hued_apply_channel` honors `HUED_XKCD`
+- Test: `test/hued.bats`, `test/hued-sh.bats`, `test/hued-fish.bats`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -447,6 +450,35 @@ git commit -m "test(names): cover the CSS+xkcd vocabulary and generator agreemen
   [ "$status" -eq 0 ]
   [[ "$output" == *"/.hued" ]]
 }
+
+@test "HUED_XKCD: set to 1 prefers the xkcd value" {
+  HUED_XKCD=1 "$HUED" set red
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#e50000" ]]
+}
+
+@test "HUED_XKCD: off values are treated as off" {
+  for off in "" 0 false no FALSE No; do
+    rm -f .hued
+    HUED_XKCD="$off" "$HUED" set red
+    got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+    [[ "$got" == "#ff0000" ]] || { echo "HUED_XKCD=$off gave $got, want #ff0000"; return 1; }
+  done
+}
+
+@test "HUED_XKCD: arbitrary truthy values are treated as on" {
+  for on in 1 true yes on TRUE; do
+    rm -f .hued
+    HUED_XKCD="$on" "$HUED" set red
+    got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+    [[ "$got" == "#e50000" ]] || { echo "HUED_XKCD=$on gave $got, want #e50000"; return 1; }
+  done
+}
+
+@test "HUED_XKCD: -x still works when the variable is unset" {
+  unset HUED_XKCD
+  "$HUED" -x set red
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#e50000" ]]
+}
 ```
 
 - [ ] **Step 2: Run to verify they fail**
@@ -456,15 +488,23 @@ Expected: FAIL — `-x` currently falls through to the usage arm and exits 1.
 
 - [ ] **Step 3: Add the pre-parse**
 
-In `bin/hued`, immediately before the top-level `case "${1:-}" in` (currently line 157), insert:
+In `bin/hued`, immediately before the top-level `case "${1:-}" in`, insert:
 
 ```bash
+# A bare -n test would make HUED_XKCD=0 mean "on".
 _HUED_XKCD=0
+case "$(printf '%s' "${HUED_XKCD:-}" | tr '[:upper:]' '[:lower:]')" in
+  ""|0|false|no) ;;
+  *) _HUED_XKCD=1 ;;
+esac
 if [[ "${1:-}" == "-x" || "${1:-}" == "--xkcd" ]]; then
   _HUED_XKCD=1
   shift
 fi
 ```
+
+The flag cannot turn the preference off — clearing the variable for one command
+(`HUED_XKCD= hued set red`) is the documented escape hatch.
 
 - [ ] **Step 4: Teach the resolvers about `-x`**
 
@@ -505,20 +545,87 @@ In `_hued_resolve_hex`, replace the `else` branch (currently lines 105-107) with
     echo "Usage: hued [-x] [where | get [bg|fg] [--name] | set [bg|fg] <color> | unset [bg|fg] | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
 ```
 
-- [ ] **Step 6: Run the tests**
+- [ ] **Step 6: Teach the shell hooks about `HUED_XKCD`**
+
+The prompt hooks resolve names without going through `bin/hued`, so they need
+the variable independently. Otherwise a `.hued` saying `background=red` paints
+`#ff0000` on `cd` and `#e50000` from `hued apply`, in the same directory.
+
+In `hued.sh`, replace `_hued_lookup` (lines 19-28) with:
 
 ```bash
-bats test/hued.bats -f "^-x"
+_hued_lookup() {
+  local key="$1" prefix="" cache_key
+  case "$(printf '%s' "${HUED_XKCD:-}" | tr '[:upper:]' '[:lower:]')" in
+    ""|0|false|no) ;;
+    *) prefix="xkcd:" ;;
+  esac
+  cache_key="${prefix}${key}"
+  if [[ -z "${_HUED_NAMES[$cache_key]+_}" ]]; then
+    local hit=""
+    [[ -n "$prefix" ]] && hit=$(grep -m1 "\[${prefix}${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+    [[ -n "$hit" ]] || hit=$(grep -m1 "\[${key}\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+    _HUED_NAMES[$cache_key]="${hit:-__miss__}"
+  fi
+  local val="${_HUED_NAMES[$cache_key]}"
+  [[ "$val" != "__miss__" ]] && printf '%s' "$val"
+}
+```
+
+The cache key carries the prefix so toggling `HUED_XKCD` mid-session does not
+serve a stale hit.
+
+In `hued.fish`, replace the lookup line inside `_hued_apply_channel` (line 15) with:
+
+```fish
+        set hit ""
+        if not string match -qir '^(|0|false|no)$' -- "$HUED_XKCD"
+            set hit (grep -m1 "\[xkcd:$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+        end
+        if test -z "$hit"
+            set hit (grep -m1 "\[$hex\]=" "$_HUED_DIR/hued-names.sh" 2>/dev/null | cut -d= -f2)
+        end
+```
+
+- [ ] **Step 7: Test the hooks**
+
+Add to `test/hued-sh.bats`:
+
+```bash
+@test "hook: HUED_XKCD prefers the xkcd value for a shared name" {
+  printf "background=red\n" > "$TMPDIR/.hued"
+  run bash -c "cd '$TMPDIR' && HUED_XKCD=1 source '$REPO/hued.sh' && _hued_apply"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"e5/00/00"* ]]
+}
+
+@test "hook: without HUED_XKCD a shared name resolves to CSS" {
+  printf "background=red\n" > "$TMPDIR/.hued"
+  run bash -c "cd '$TMPDIR' && source '$REPO/hued.sh' && _hued_apply"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ff/00/00"* ]]
+}
+```
+
+Match the existing setup conventions in that file — read it first; the variable
+names above (`TMPDIR`, `REPO`) may differ from what it already uses, and the
+existing tests show how the hook's OSC output is captured. Add the equivalent
+pair to `test/hued-fish.bats` following its own conventions, and skip if `fish`
+is not installed, as that file already does.
+
+- [ ] **Step 8: Run the tests**
+
+```bash
 bats test/
 ```
 
 Expected: all PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add bin/hued test/hued.bats
-git commit -m "feat: add -x to prefer xkcd values for names CSS also defines"
+git add bin/hued hued.sh hued.fish test/
+git commit -m "feat: prefer xkcd values via -x or HUED_XKCD"
 ```
 
 ---

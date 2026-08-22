@@ -149,14 +149,24 @@ Everything else resolves exactly as it does today.
 
 ### The `-x` flag
 
-`-x` makes xkcd the preferred vocabulary for the 92 names where the two sources disagree.
-It is a per-invocation flag with no env var or `.hued` equivalent:
+`-x` makes xkcd the preferred vocabulary for the 92 names where the two sources
+disagree. `HUED_XKCD` does the same for a whole shell or a direnv'd project:
 
 ```
-hued set red        -> #ff0000   (CSS)
-hued -x set red     -> #e50000   (xkcd)
-hued set emerald    -> #01a049   (xkcd-only; -x changes nothing)
+hued set red              -> #ff0000   (CSS)
+hued -x set red           -> #e50000   (xkcd)
+HUED_XKCD=1 hued set red  -> #e50000   (xkcd)
+hued set emerald          -> #01a049   (xkcd-only; neither changes it)
 ```
+
+`-x` and `HUED_XKCD` are equivalent and independent — either one turns the
+preference on, and the flag cannot turn it back off. To get one CSS lookup while
+the variable is set, clear it for that command: `HUED_XKCD= hued set red`.
+
+`HUED_XKCD` is off when unset, empty, `0`, `false` or `no` (case-insensitive),
+and on for any other value. The repo's existing `HUED_BACKGROUND` convention is a
+bare `-n` test, which would make `HUED_XKCD=0` mean *on* — the wrong answer for a
+boolean, and silent when it happens.
 
 The generator emits the 92 conflicting values a second time under a namespaced key in the
 same file:
@@ -178,7 +188,15 @@ Cost is ~2 KB.
 
 `-x` is a global flag parsed before the subcommand (`hued -x set red`), because
 hued's dispatcher switches on `$1` and a per-subcommand flag would have to be
-added to each arm.
+added to each arm. The flag and the variable resolve to one internal
+`_HUED_XKCD` that the rest of the script reads.
+
+The shell hooks resolve names independently of `bin/hued` (`hued.sh:19-28`,
+`hued.fish:7-24`), so they need the variable too. Without it, a hand-edited
+`.hued` saying `background=red` would paint `#ff0000` from the prompt hook and
+`#e50000` from `hued apply` in the same directory. `hued.sh` memoizes lookups in
+`_HUED_NAMES`, so its cache key must include the mode or a mid-session toggle
+serves stale hits.
 
 `-x` also flips reverse lookup, so `hued -x get bg --name` and `hued -x -i`
 prefer xkcd names for a given hex. In Python this means `src/picker/names.py`
