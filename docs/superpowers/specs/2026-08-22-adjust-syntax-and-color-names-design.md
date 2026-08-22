@@ -125,7 +125,8 @@ the generator and one source of drift — the list has not changed since
 
 ### Precedence: CSS wins
 
-CSS supplies its 148 authoritatively; xkcd supplies the other 839. xkcd is a
+CSS supplies its 148 authoritatively; xkcd supplies the other 839. 95 names appear
+in both lists and 92 of them disagree. xkcd is a
 perception survey, so left to win ties it reads `red` as `#e50000`, `gray` as
 `#bebebe` and `blue` as `#0343df` — defensible as survey data, wrong for a tool
 whose whole job is setting terminal colors. Under CSS-wins, no CSS value moves.
@@ -148,7 +149,7 @@ Everything else resolves exactly as it does today.
 
 ### The `-x` flag
 
-`-x` makes xkcd the preferred vocabulary for the 95 names both sources define.
+`-x` makes xkcd the preferred vocabulary for the 92 names where the two sources disagree.
 It is a per-invocation flag with no env var or `.hued` equivalent:
 
 ```
@@ -157,7 +158,7 @@ hued -x set red     -> #e50000   (xkcd)
 hued set emerald    -> #01a049   (xkcd-only; -x changes nothing)
 ```
 
-The generator emits the 95 overrides a second time under a namespaced key in the
+The generator emits the 92 conflicting values a second time under a namespaced key in the
 same file:
 
 ```bash
