@@ -117,9 +117,15 @@ Six canonical keywords move: `green` `#008000` -> `#00ff00`, `lime` `#00ff00` ->
 `olive`. `gray`, `red`, `blue`, `black`, `white`, `yellow`, `teal`, `purple`,
 `maroon` and `silver` are unaffected.
 
-No existing `.hued` file changes meaning: since 7822786 the file stores hex with
-the name as an inline comment, so precedence affects only what `hued set <name>`
+Hex is primary, so the blast radius is small: since 7822786 hued writes hex with
+the name as an inline comment, and precedence affects only what `hued set <name>`
 resolves at input time.
+
+The exception is read-time name resolution, which the resolvers still support —
+`_hued_resolve_hex` in `bin/hued`, plus `hued.sh:23` and `hued.fish:15`. A
+hand-edited `.hued`, or one written before 7822786, can still carry
+`background=navy` and would repaint to `#01153e` rather than `#000080`. Nothing
+hued has written recently is affected.
 
 ### Key normalization
 
