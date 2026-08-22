@@ -594,7 +594,12 @@ PYEOF
       [[ -z "$_raw_fg" ]] || _current_fg=$(_hued_normalize_color "$_raw_fg")
     fi
     _live_flag=""
-    for _arg in "$@"; do [[ "$_arg" == "--live" ]] && _live_flag="--live" && break; done
+    for _arg in "$@"; do
+      case "$_arg" in
+        --live)    _live_flag="--live" ;;
+        -x|--xkcd) _HUED_XKCD=1 ;;
+      esac
+    done
     _xkcd_flag=""
     [[ "${_HUED_XKCD:-0}" == "1" ]] && _xkcd_flag="--xkcd"
     _tmpfile=$(mktemp)
