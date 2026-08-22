@@ -46,56 +46,41 @@ _hued_normalize_color() {
   printf '%s' "$1"
 }
 
-# Parse an amount into a pastel fraction. Accepts "20", "20%", "+20%", "-20%".
-# Status 1 = not a number, 2 = ambiguous bare fraction in (0,1).
-_hued_parse_amount() {
-  local val="$1" n abs
+# Print a pastel fraction for an amount ("20", "20%", "+20%", "-20%").
+# Prints its own error and returns 1 on failure.
+_hued_amount() {
+  local val="$1" n sign mag
   if [[ "$val" =~ ^([+-]?[0-9]+(\.[0-9]+)?)%$ ]]; then
     n="${BASH_REMATCH[1]}"
   elif [[ "$val" =~ ^([+-]?[0-9]+(\.[0-9]+)?)$ ]]; then
     n="${BASH_REMATCH[1]}"
-    abs="${n#[+-]}"
-    awk -v a="$abs" 'BEGIN{exit !(a>0 && a<1)}' && return 2
+    sign=""; mag="$n"
+    if [[ "$mag" == [+-]* ]]; then sign="${mag:0:1}"; mag="${mag:1}"; fi
+    if awk -v a="$mag" 'BEGIN{exit !(a>0 && a<1)}'; then
+      echo "hued mod: $val is ambiguous — write \"$val%\" for $val percent, or \"${sign}$(awk -v a="$mag" 'BEGIN{printf "%g", a*100}')%\"" >&2
+      return 1
+    fi
   else
+    echo "hued mod: '$val' is not a number" >&2
     return 1
   fi
   awk -v n="$n" 'BEGIN{printf "%g", n/100}'
 }
 
-# Report a parse failure. $1 is the status from _hued_parse_amount, $2 the raw
-# token. Returns 1 when it printed an error, 0 when the parse was fine.
-_hued_amount_error() {
-  case "$1" in
-    1)
-      echo "hued mod: '$2' is not a number" >&2
-      return 1
-      ;;
-    2)
-      local sign="" mag="$2"
-      if [[ "$mag" == [+-]* ]]; then sign="${mag:0:1}"; mag="${mag:1}"; fi
-      echo "hued mod: $2 is ambiguous — write \"$2%\" for $2 percent, or \"${sign}$(awk -v a="$mag" 'BEGIN{printf "%g", a*100}')%\"" >&2
-      return 1
-      ;;
-  esac
-  return 0
-}
-
-# Parse degrees. Accepts "30", "30deg", "30°", each with an optional sign.
-# Status 1 = not a number.
-_hued_parse_degrees() {
+# Prints its own error and returns 1 on failure.
+_hued_degrees() {
   local val="${1%deg}"
   val="${val%°}"
-  [[ "$val" =~ ^[+-]?[0-9]+(\.[0-9]+)?$ ]] || return 1
+  if [[ ! "$val" =~ ^[+-]?[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "hued mod: '$1' is not a number of degrees" >&2
+    return 1
+  fi
   printf '%s' "$val"
 }
 
-_hued_is_op() {
-  case "$1" in
-    darken|lighten|saturate|desaturate|rotate|complement|to-gray|mix|lightness|saturation|hue)
-      return 0 ;;
-    *) return 1 ;;
-  esac
-}
+_HUED_OPS="darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue"
+
+_hued_is_op() { [[ -n "$1" && " $_HUED_OPS " == *" $1 "* ]]; }
 
 _hued_invert() {
   case "$1" in
@@ -106,13 +91,13 @@ _hued_invert() {
   esac
 }
 
-_HUED_OPS="darken, lighten, saturate, desaturate, rotate, complement, to-gray, mix, lightness, saturation, hue"
+_hued_pastel() { pastel "$@" | pastel format hex; }
 
 # Apply a chain of ops to a color, printing the resulting hex.
 # Usage: _hued_mod_run <color> <op> [args...] [<op> [args...]]...
 _hued_mod_run() {
   local color="$1"; shift
-  local op raw amount deg other verb prop rc
+  local op raw amount deg other verb prop
 
   while [[ $# -gt 0 ]]; do
     op="$1"; shift
@@ -120,23 +105,22 @@ _hued_mod_run() {
       darken|lighten|saturate|desaturate)
         [[ $# -gt 0 ]] || { echo "hued mod: $op requires an amount" >&2; return 1; }
         raw="$1"; shift
-        amount=$(_hued_parse_amount "$raw") && rc=0 || rc=$?
-        _hued_amount_error "$rc" "$raw" || return 1
+        amount=$(_hued_amount "$raw") || return 1
         if [[ "$amount" == -* ]]; then
           op=$(_hued_invert "$op")
           amount="${amount#-}"
         fi
-        color=$(pastel "$op" "$amount" "$color" | pastel format hex) || return 1
+        color=$(_hued_pastel "$op" "$amount" "$color") || return 1
         ;;
       rotate)
         [[ $# -gt 0 ]] || { echo "hued mod: rotate requires degrees" >&2; return 1; }
         raw="$1"; shift
-        deg=$(_hued_parse_degrees "$raw") || {
-          echo "hued mod: '$raw' is not a number of degrees" >&2; return 1; }
-        color=$(pastel rotate -- "$deg" "$color" | pastel format hex) || return 1
+        deg=$(_hued_degrees "$raw") || return 1
+        # -- keeps a negative angle from being read as a pastel flag
+        color=$(_hued_pastel rotate -- "$deg" "$color") || return 1
         ;;
       complement|to-gray)
-        color=$(pastel "$op" "$color" | pastel format hex) || return 1
+        color=$(_hued_pastel "$op" "$color") || return 1
         ;;
       mix)
         [[ $# -gt 0 ]] || { echo "hued mod: mix requires a color" >&2; return 1; }
@@ -144,44 +128,42 @@ _hued_mod_run() {
         amount="0.5"
         if [[ $# -gt 0 ]] && ! _hued_is_op "$1"; then
           raw="$1"; shift
-          amount=$(_hued_parse_amount "$raw") && rc=0 || rc=$?
-          _hued_amount_error "$rc" "$raw" || return 1
-          [[ "$amount" == -* ]] && {
-            echo "hued mod: mix ratio cannot be negative" >&2; return 1; }
+          amount=$(_hued_amount "$raw") || return 1
+          if [[ "$amount" == -* ]]; then
+            echo "hued mod: mix ratio cannot be negative" >&2
+            return 1
+          fi
         fi
-        color=$(pastel mix --fraction "$amount" "$other" "$color" | pastel format hex) || return 1
+        color=$(_hued_pastel mix --fraction "$amount" "$other" "$color") || return 1
         ;;
       lightness|saturation)
         [[ $# -gt 0 ]] || { echo "hued mod: $op requires a value" >&2; return 1; }
         raw="$1"; shift
-        amount=$(_hued_parse_amount "$raw") && rc=0 || rc=$?
-        _hued_amount_error "$rc" "$raw" || return 1
+        amount=$(_hued_amount "$raw") || return 1
         if [[ "$raw" == [+-]* ]]; then
-          if [[ "$op" == "lightness" ]]; then
-            verb="lighten"; [[ "$amount" == -* ]] && verb="darken"
-          else
-            verb="saturate"; [[ "$amount" == -* ]] && verb="desaturate"
+          if [[ "$op" == "lightness" ]]; then verb="lighten"; else verb="saturate"; fi
+          if [[ "$amount" == -* ]]; then
+            verb=$(_hued_invert "$verb")
+            amount="${amount#-}"
           fi
-          color=$(pastel "$verb" "${amount#-}" "$color" | pastel format hex) || return 1
+          color=$(_hued_pastel "$verb" "$amount" "$color") || return 1
         else
-          prop="hsl-lightness"
-          [[ "$op" == "saturation" ]] && prop="hsl-saturation"
-          color=$(pastel set "$prop" "$amount" "$color" | pastel format hex) || return 1
+          if [[ "$op" == "lightness" ]]; then prop="hsl-lightness"; else prop="hsl-saturation"; fi
+          color=$(_hued_pastel set "$prop" "$amount" "$color") || return 1
         fi
         ;;
       hue)
         [[ $# -gt 0 ]] || { echo "hued mod: hue requires degrees" >&2; return 1; }
         raw="$1"; shift
-        deg=$(_hued_parse_degrees "$raw") || {
-          echo "hued mod: '$raw' is not a number of degrees" >&2; return 1; }
+        deg=$(_hued_degrees "$raw") || return 1
         if [[ "$raw" == [+-]* ]]; then
-          color=$(pastel rotate -- "$deg" "$color" | pastel format hex) || return 1
+          color=$(_hued_pastel rotate -- "$deg" "$color") || return 1
         else
-          color=$(pastel set hsl-hue "$deg" "$color" | pastel format hex) || return 1
+          color=$(_hued_pastel set hsl-hue "$deg" "$color") || return 1
         fi
         ;;
       *)
-        echo "hued mod: unknown op '$op' ($_HUED_OPS)" >&2
+        echo "hued mod: unknown op '$op' (${_HUED_OPS// /, })" >&2
         return 1
         ;;
     esac
@@ -330,13 +312,15 @@ case "${1:-}" in
   mod|adjust)
     shift
     key="background"
+    # With no channel given, an unknown leading token may have been meant as one.
+    expected="expected bg|fg or one of: ${_HUED_OPS// /, }"
     case "${1:-}" in
-      bg|background) key="background"; shift ;;
-      fg|foreground) key="foreground"; shift ;;
+      bg|background) key="background"; shift; expected="${_HUED_OPS// /, }" ;;
+      fg|foreground) key="foreground"; shift; expected="${_HUED_OPS// /, }" ;;
     esac
     [[ $# -gt 0 ]] || { echo "Usage: hued mod [bg|fg] <op> [<args>...]" >&2; exit 1; }
     _hued_is_op "$1" || {
-      echo "hued mod: unknown op '$1' ($_HUED_OPS)" >&2
+      echo "hued mod: unknown op '$1' ($expected)" >&2
       exit 1
     }
     command -v pastel >/dev/null 2>&1 || {
