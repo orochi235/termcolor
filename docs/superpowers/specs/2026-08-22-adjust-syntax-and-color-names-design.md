@@ -1,7 +1,7 @@
 # Adjust syntax and expanded color names
 
 Design for two changes to `hued`: a reworked `mod`/`adjust` grammar, and a
-~5,700-name color vocabulary replacing the current 676 X11 entries. Written for
+987-name color vocabulary replacing the current 676 X11 entries. Written for
 whoever implements it; assumes familiarity with `bin/hued` and `pastel`.
 
 ## Part 1 — `mod` / `adjust` grammar
@@ -70,8 +70,23 @@ hued mod bg saturation -25%
 hued mod bg hue +30deg
 ```
 
-Absolute assignment is new capability, not sugar: it maps to `pastel set
-<property> <value> <color>`, which hued does not currently expose.
+Absolute assignment is new capability, not sugar: it maps to `pastel set`, which
+hued does not currently expose. The property names matter — `pastel set
+lightness` is *Lab* lightness on a 0-100 scale, so `set lightness 0.4` renders
+near-black. `darken`/`lighten`/`saturate`/`desaturate` all operate on HSL, so
+the absolute forms must use the HSL properties to stay consistent with them:
+
+| Written | Executed |
+|---|---|
+| `lightness 40%` | `pastel set hsl-lightness 0.4` |
+| `lightness +10%` | `pastel lighten 0.1` |
+| `saturation 90%` | `pastel set hsl-saturation 0.9` |
+| `saturation -25%` | `pastel desaturate 0.25` |
+| `hue 200deg` | `pastel set hsl-hue 200` |
+| `hue +30deg` | `pastel rotate -- 30` |
+
+Verified: `pastel set hsl-lightness 0.4 '#336699'` returns `#336699` unchanged,
+because that color is already at HSL L=40%.
 
 ### Chained ops
 
@@ -94,44 +109,49 @@ amounts, so this is decidable without lookahead beyond one token.
 |---|---|---|
 | CSS Color Module Level 4 named colors | 148 | spec, no license needed |
 | [xkcd color survey](https://xkcd.com/color/rgb.txt) | 934 | CC0 |
-| [meodai/color-names](https://github.com/meodai/color-names) `colornames.bestof.csv` | 4,958 | MIT |
 
-Union: **5,709 names**. `hued-names.sh` grows 14 KB -> ~131 KB.
+Union: **987 names**. `hued-names.sh` grows 14 KB -> ~22 KB.
+
+meodai/color-names was evaluated and rejected: at 4,958 entries it is a paint
+catalog, not a color vocabulary ("Emerald Ice Palace", "Emerald Whispers"). The
+names are not ones anyone would type, and they crowd the reverse lookup with
+noise.
 
 The current source, X11 `rgb.txt`, is dropped. Its 676 entries are 519 numbered
 variants (`azure1..4`, `gray0..100`) plus 157 names, of which 148 are exactly the
-CSS set and 9 are X11-only leftovers (`webgray`, `webgreen`, `webgrey`,
-`webmaroon`, `webpurple`, `navyblue`, `violetred`, `lightslateblue`,
-`lightgoldenrod`). Keeping the CSS 148 as a hardcoded list removes the
-`rgb.txt` fetch from the generator and one source of drift — the list has not
-changed since `rebeccapurple` was added in 2014.
+CSS set. Keeping the CSS 148 as a hardcoded list removes the `rgb.txt` fetch from
+the generator and one source of drift — the list has not changed since
+`rebeccapurple` was added in 2014.
 
-### Precedence: longer list wins
+### Precedence: CSS wins
 
-Applied in order CSS -> xkcd -> meodai, each overwriting the last. CSS therefore
-supplies only the 41 names no other source has; 76 of its 148 values are
-overridden.
+CSS supplies its 148 authoritatively; xkcd supplies the other 839. xkcd is a
+perception survey, so left to win ties it reads `red` as `#e50000`, `gray` as
+`#bebebe` and `blue` as `#0343df` — defensible as survey data, wrong for a tool
+whose whole job is setting terminal colors. Under CSS-wins, no CSS value moves.
 
-Six canonical keywords move: `green` `#008000` -> `#00ff00`, `lime` `#00ff00` ->
-`#aaff32`, `navy` `#000080` -> `#01153e`, and small shifts in `aqua`, `fuchsia`,
-`olive`. `gray`, `red`, `blue`, `black`, `white`, `yellow`, `teal`, `purple`,
-`maroon` and `silver` are unaffected.
+### What changes for existing files
 
-Hex is primary, so the blast radius is small: since 7822786 hued writes hex with
-the name as an inline comment, and precedence affects only what `hued set <name>`
-resolves at input time.
+Hex is primary — since 7822786 hued writes hex with the name as an inline
+comment — so this only affects name resolution at read time, which the resolvers
+still support (`_hued_resolve_hex` in `bin/hued`, `hued.sh:23`, `hued.fish:15`).
+A hand-edited or pre-7822786 `.hued` naming a color is the only exposure:
 
-The exception is read-time name resolution, which the resolvers still support —
-`_hued_resolve_hex` in `bin/hued`, plus `hued.sh:23` and `hued.fish:15`. A
-hand-edited `.hued`, or one written before 7822786, can still carry
-`background=navy` and would repaint to `#01153e` rather than `#000080`. Nothing
-hued has written recently is affected.
+- **526 keys stop resolving:** the 519 numbered variants plus `lightgoldenrod`,
+  `lightslateblue`, `webgray`, `webgreen`, `webgrey`, `webmaroon`, `webpurple`.
+  A `.hued` saying `background=gray50` will no longer resolve and that channel
+  goes unset.
+- **2 keys change value:** `navyblue` `#000080` -> `#001146` and `violetred`
+  `#d02090` -> `#a50055`, both now supplied by xkcd's "navy blue" / "violet red".
+
+Everything else resolves exactly as it does today.
 
 ### Key normalization
 
 Keys are lowercased with spaces, hyphens and apostrophes stripped, so
-`hued set "emerald bliss"` and `hued set emeraldbliss` are the same lookup.
-One intra-source collision exists (`stardust` in meodai); first entry wins.
+`hued set "baby poop green"` and `hued set babypoopgreen` are the same lookup.
+688 of xkcd's 934 names are multi-word, so this is the common case, not an edge
+case. No intra-source key collisions exist after normalization.
 
 ### One generator, two outputs
 
@@ -146,7 +166,7 @@ in sync only by luck. `scripts/names_to_py.py` is already dead: its input
 ### Reverse lookup
 
 `src/picker/colors.py:179 nearest_name()` already does nearest-color naming for
-the picker. At 5,709 names it can name essentially any hex, which makes two
+the picker. At 987 names it can name far more hex values than today, which makes two
 things worth doing:
 
 - Expose it on the CLI as `hued get [bg|fg] --name`.
@@ -154,10 +174,10 @@ things worth doing:
   (only on exact-name input); with a dense list it can name picker-chosen hex
   values too.
 
-`nearest_name()` is a linear scan run per render. Going 676 -> 5,709 comparisons
-needs a precomputed structure — bucket by quantized RGB, or precompute the
-name list into a spatial index at generation time — so the live picker does not
-regress.
+`nearest_name()` is a linear scan run per render. 676 -> 987 comparisons is a
+1.5x increase, not the 8x the meodai list would have caused, so no index is
+needed — but the picker benchmark should confirm the per-render cost before and
+after.
 
 ## Testing
 
@@ -165,10 +185,11 @@ regress.
   percent equivalence; the `(0,1)` ambiguity error; channel-omitted forms;
   absolute vs relative signed ops; a chain applying all transforms with exactly
   one file write.
-- `test/hued.bats`: `hued set emerald` resolves; a multi-word name resolves;
-  the six shifted keywords resolve to their new values; the 41 CSS-only names
-  still resolve.
-- `tests/picker/`: `nearest_name()` returns identical results before and after
-  the index change for a fixed sample, and stays within budget at 5,709 names.
+- `test/hued.bats`: `hued set emerald` resolves to `#01a049`; a multi-word name
+  (`hued set "baby poop green"`) resolves; every canonical CSS keyword still
+  resolves to its CSS value (`red` -> `#ff0000`, `gray` -> `#808080`); a dropped
+  numbered variant (`gray50`) no longer resolves.
+- `tests/picker/`: `nearest_name()` returns a known name for a known hex at 987
+  entries, and per-render cost stays within budget.
 - Generator: `hued-names.sh` and `src/picker/names.py` contain identical
   key/value sets.
