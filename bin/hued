@@ -22,6 +22,14 @@ _hued_find() {
   return 1
 }
 
+# Lowercase and strip spaces, hyphens and apostrophes, matching the key
+# normalization in scripts/generate-names.py.
+_hued_name_key() {
+  local k="$1"
+  k="${k// /}"; k="${k//-/}"; k="${k//\'/}"; k="${k//’/}"
+  printf '%s' "${k,,}"
+}
+
 _hued_normalize_color() {
   local bare="${1#\#}"
 
@@ -38,8 +46,9 @@ _hued_normalize_color() {
 
   # Named color — resolve via hued-names.sh
   if [[ -f "$_HUED_NAMES_FILE" ]]; then
-    local hex
-    hex=$(grep -m1 "\[${bare}\]=" "$_HUED_NAMES_FILE" 2>/dev/null | cut -d= -f2)
+    local key hex
+    key=$(_hued_name_key "$bare")
+    hex=$({ grep -m1 "\[${key}\]=" "$_HUED_NAMES_FILE" 2>/dev/null || true; } | cut -d= -f2)
     [[ -n "$hex" ]] && printf '%s' "$hex" && return
   fi
 
