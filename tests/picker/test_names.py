@@ -36,10 +36,17 @@ def test_named_colors_all_valid_hex():
         assert re.match(r"^#[0-9a-f]{6}$", hex_val), f"{name}={hex_val}"
 
 
-def test_keys_are_normalized():
-    for name in NAMED_COLORS:
-        assert name == name.lower()
-        assert " " not in name and "-" not in name and "'" not in name
+def test_keys_are_grep_safe():
+    """The shells grep "[<key>]=" and reject keys outside this alphabet."""
+    import re
+    for name in list(NAMED_COLORS) + list(XKCD_OVERRIDES):
+        assert re.fullmatch(r"[a-z0-9/]+", name), name
+
+
+def test_spelling_collisions_resolve_to_the_exact_spelling():
+    """xkcd spells some colors both ways; the spelling equal to the key wins."""
+    assert XKCD_OVERRIDES["lightblue"] == "#7bc8f6"   # not "light blue"
+    assert NAMED_COLORS["bluegreen"] == "#017a79"     # not "blue green"
 
 
 def test_both_generated_files_agree():

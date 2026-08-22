@@ -1,5 +1,7 @@
 from __future__ import annotations
 import dataclasses
+
+import pytest
 from src.picker.colors import RGB
 from src.picker.app import State, Action, initial_state
 
@@ -868,4 +870,38 @@ def test_palette_is_a_copy_of_named_colors():
     from src.picker.names import NAMED_COLORS
 
     assert _PALETTE is not NAMED_COLORS
+    assert _PALETTE == NAMED_COLORS
     assert NAMED_COLORS["red"] == "#ff0000"
+
+
+@pytest.fixture
+def restored_palette():
+    """main(--xkcd) mutates the module-level palette; put it back afterwards."""
+    from src.picker.app import _PALETTE
+
+    saved = dict(_PALETTE)
+    yield _PALETTE
+    _PALETTE.clear()
+    _PALETTE.update(saved)
+
+
+def test_main_xkcd_merges_the_overrides(restored_palette, tmp_path):
+    from unittest.mock import patch
+    import src.picker.app as app
+
+    with patch.object(app, "run", lambda *a, **kw: 0):
+        rc = app.main(["--xkcd", "--output", str(tmp_path / "out")])
+
+    assert rc == 0
+    assert restored_palette["red"] == "#e50000"
+
+
+def test_main_without_xkcd_keeps_the_css_palette(restored_palette, tmp_path):
+    from unittest.mock import patch
+    import src.picker.app as app
+
+    with patch.object(app, "run", lambda *a, **kw: 0):
+        rc = app.main(["--output", str(tmp_path / "out")])
+
+    assert rc == 0
+    assert restored_palette["red"] == "#ff0000"
