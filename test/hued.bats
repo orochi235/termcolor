@@ -412,6 +412,7 @@ teardown() {
   run "$HUED" mod xyz darken 20%
   [ "$status" -eq 1 ]
   [[ "$output" == *"unknown op"* ]]
+  [[ "$output" == *"expected bg|fg"* ]]
 }
 
 @test "mod bg: missing op fails with usage" {
@@ -450,15 +451,6 @@ teardown() {
   printf "background=#888888\n" > .hued
   run "$HUED" mod bg darken 20%
   [ "$status" -eq 0 ]
-  new=$(grep ^background= .hued | cut -d= -f2)
-  expected=$(pastel darken 0.2 '#888888' | pastel format hex)
-  [[ "$new" == "$expected" ]]
-}
-
-@test "mod bg darken: accepts percent" {
-  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
-  printf "background=#888888\n" > .hued
-  "$HUED" mod bg darken 20%
   new=$(grep ^background= .hued | cut -d= -f2)
   expected=$(pastel darken 0.2 '#888888' | pastel format hex)
   [[ "$new" == "$expected" ]]
@@ -571,15 +563,6 @@ teardown() {
   [[ "$new" == "$expected" ]]
 }
 
-@test "mod bg mix: ratio percent" {
-  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
-  printf "background=#ff0000\n" > .hued
-  "$HUED" mod bg mix '#0000ff' 25%
-  new=$(grep ^background= .hued | cut -d= -f2)
-  expected=$(pastel mix --fraction 0.25 '#0000ff' '#ff0000' | pastel format hex)
-  [[ "$new" == "$expected" ]]
-}
-
 @test "mod: channel defaults to background" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#888888\n" > .hued
@@ -679,6 +662,17 @@ teardown() {
 @test "mod bg lightness: unsigned value sets HSL lightness absolutely" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#336699\n" > .hued
+  "$HUED" mod bg lightness 70%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel set hsl-lightness 0.7 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+# #336699 already sits at HSL L=40%, so this pins the scale to HSL: a Lab
+# lightness assignment would move it.
+@test "mod bg lightness: setting the value it already has is a no-op" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
   "$HUED" mod bg lightness 40%
   new=$(grep ^background= .hued | cut -d= -f2)
   [[ "$new" == "#336699" ]]
@@ -717,6 +711,82 @@ teardown() {
   "$HUED" mod bg hue +30deg
   new=$(grep ^background= .hued | cut -d= -f2)
   expected=$(pastel rotate -- 30 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg lighten: negative amount darkens" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod bg lighten -10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel darken 0.1 '#888888' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg desaturate: negative amount saturates" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#cc4444\n" > .hued
+  "$HUED" mod bg desaturate -25%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel saturate 0.25 '#cc4444' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg mix: an explicit ratio can be followed by another op" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg mix '#0000ff' 25% darken 10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  step1=$(pastel mix --fraction 0.25 '#0000ff' '#ff0000' | pastel format hex)
+  expected=$(pastel darken 0.1 "$step1" | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg mix: works as a non-leading op in a chain" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg darken 10% mix '#0000ff' 25%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  step1=$(pastel darken 0.1 '#ff0000' | pastel format hex)
+  expected=$(pastel mix --fraction 0.25 '#0000ff' "$step1" | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg: complement in the middle of a chain" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg complement darken 10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  step1=$(pastel complement '#ff0000' | pastel format hex)
+  expected=$(pastel darken 0.1 "$step1" | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg: to-gray in the middle of a chain" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg to-gray lighten 10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  step1=$(pastel to-gray '#ff0000' | pastel format hex)
+  expected=$(pastel lighten 0.1 "$step1" | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg hue: negative signed value rotates backwards" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg hue -30deg
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel rotate -- -30 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg saturation: a bare number is read as percent" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg saturation 90
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel set hsl-saturation 0.9 '#336699' | pastel format hex)
   [[ "$new" == "$expected" ]]
 }
 
