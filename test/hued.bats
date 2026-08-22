@@ -571,6 +571,84 @@ teardown() {
   [[ "$new" == "$expected" ]]
 }
 
+@test "mod: channel defaults to background" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod darken 20%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel darken 0.2 '#888888' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod: unknown leading token fails as unknown op" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  run "$HUED" mod xyz 20%
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unknown op"* ]]
+}
+
+@test "mod bg darken: negative amount lightens" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod bg darken -10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel lighten 0.1 '#888888' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg saturate: negative amount desaturates" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#cc4444\n" > .hued
+  "$HUED" mod bg saturate -25%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel desaturate 0.25 '#cc4444' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg: chained ops apply in order" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod bg darken 10% rotate 30deg
+  new=$(grep ^background= .hued | cut -d= -f2)
+  step1=$(pastel darken 0.1 '#888888' | pastel format hex)
+  expected=$(pastel rotate -- 30 "$step1" | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg: a chain writes the key exactly once" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  "$HUED" mod bg darken 10% rotate 30deg desaturate 5%
+  [ "$(grep -c '^background=' .hued)" -eq 1 ]
+}
+
+@test "mod bg: a failing op in a chain leaves the file untouched" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#888888\n" > .hued
+  run "$HUED" mod bg darken 10% rotate sideways
+  [ "$status" -eq 1 ]
+  [[ "$(grep ^background= .hued | cut -d= -f2)" == "#888888" ]]
+}
+
+@test "mod bg mix: ratio in a chain is distinguished from a following op" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg mix '#0000ff' darken 10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  step1=$(pastel mix --fraction 0.5 '#0000ff' '#ff0000' | pastel format hex)
+  expected=$(pastel darken 0.1 "$step1" | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg mix: negative ratio fails" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  run "$HUED" mod bg mix '#0000ff' -25%
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cannot be negative"* ]]
+}
+
 @test "mod bg: fails when pastel not installed" {
   command -v pastel >/dev/null 2>&1 && skip "pastel is installed"
   printf "background=#ff0000\n" > .hued

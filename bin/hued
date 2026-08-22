@@ -326,13 +326,17 @@ case "${1:-}" in
     ;;
 
   mod|adjust)
-    case "${2:-}" in
-      bg|background) key="background" ;;
-      fg|foreground) key="foreground" ;;
-      *) echo "Usage: hued mod [bg|fg] <op> [<args>...]" >&2; exit 1 ;;
+    shift
+    key="background"
+    case "${1:-}" in
+      bg|background) key="background"; shift ;;
+      fg|foreground) key="foreground"; shift ;;
     esac
-    op="${3:-}"
-    [[ -z "$op" ]] && { echo "Usage: hued mod $2 <op> [<args>...]" >&2; exit 1; }
+    [[ $# -gt 0 ]] || { echo "Usage: hued mod [bg|fg] <op> [<args>...]" >&2; exit 1; }
+    _hued_is_op "$1" || {
+      echo "hued mod: unknown op '$1' ($_HUED_OPS)" >&2
+      exit 1
+    }
     command -v pastel >/dev/null 2>&1 || {
       echo "hued mod: requires 'pastel' (brew install pastel)" >&2
       exit 1
@@ -340,38 +344,7 @@ case "${1:-}" in
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
     current=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | awk '{print $1}')
     [[ -z "$current" ]] && { echo "hued mod: ${key} not set in $file" >&2; exit 1; }
-    case "$op" in
-      darken|lighten|saturate|desaturate)
-        amount="${4:-}"
-        [[ -z "$amount" ]] && { echo "Usage: hued mod $2 $op <amount|percent>" >&2; exit 1; }
-        amount=$(_hued_parse_amount "$amount") && rc=0 || rc=$?
-        _hued_amount_error "$rc" "${4:-}" || exit 1
-        new=$(pastel "$op" "$amount" "$current" | pastel format hex) || exit 1
-        ;;
-      rotate)
-        [[ -z "${4:-}" ]] && { echo "Usage: hued mod $2 rotate <degrees>" >&2; exit 1; }
-        degrees=$(_hued_parse_degrees "$4") || {
-          echo "hued mod: '$4' is not a number of degrees" >&2; exit 1; }
-        new=$(pastel rotate "$degrees" "$current" | pastel format hex) || exit 1
-        ;;
-      complement|to-gray)
-        new=$(pastel "$op" "$current" | pastel format hex) || exit 1
-        ;;
-      mix)
-        other="${4:-}"
-        [[ -z "$other" ]] && { echo "Usage: hued mod $2 mix <other-color> [<ratio>]" >&2; exit 1; }
-        ratio="0.5"
-        if [[ -n "${5:-}" ]]; then
-          ratio=$(_hued_parse_amount "$5") && rc=0 || rc=$?
-          _hued_amount_error "$rc" "$5" || exit 1
-        fi
-        new=$(pastel mix --fraction "$ratio" "$other" "$current" | pastel format hex) || exit 1
-        ;;
-      *)
-        echo "hued mod: unknown op '$op' (darken, lighten, saturate, desaturate, rotate, complement, to-gray, mix)" >&2
-        exit 1
-        ;;
-    esac
+    new=$(_hued_mod_run "$current" "$@") || exit 1
     _hued_set_key "$key" "$new"
     _hued_apply_cmd
     ;;
