@@ -500,6 +500,32 @@ teardown() {
   [[ "$new" == "$expected" ]]
 }
 
+@test "mod bg rotate: accepts a negative angle" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg rotate -90
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel rotate -- -90 '#ff0000' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg rotate: accepts a negative angle with deg suffix" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  "$HUED" mod bg rotate -90deg
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel rotate -- -90 '#ff0000' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg rotate: non-numeric angle fails" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#ff0000\n" > .hued
+  run "$HUED" mod bg rotate sideways
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"degrees"* ]]
+}
+
 @test "mod bg complement: no extra arg required" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#ff0000\n" > .hued

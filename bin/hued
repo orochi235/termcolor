@@ -78,9 +78,12 @@ _hued_amount_error() {
   return 0
 }
 
+# Parse degrees. Accepts "30", "30deg", "30°", each with an optional sign.
+# Status 1 = not a number.
 _hued_parse_degrees() {
   local val="${1%deg}"
   val="${val%°}"
+  [[ "$val" =~ ^[+-]?[0-9]+(\.[0-9]+)?$ ]] || return 1
   printf '%s' "$val"
 }
 
@@ -246,7 +249,8 @@ case "${1:-}" in
         ;;
       rotate)
         [[ -z "${4:-}" ]] && { echo "Usage: hued mod $2 rotate <degrees>" >&2; exit 1; }
-        degrees="$(_hued_parse_degrees "$4")"
+        degrees=$(_hued_parse_degrees "$4") || {
+          echo "hued mod: '$4' is not a number of degrees" >&2; exit 1; }
         new=$(pastel rotate "$degrees" "$current" | pastel format hex) || exit 1
         ;;
       complement|to-gray)
