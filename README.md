@@ -75,17 +75,17 @@ PROMPT_COMMAND="_hued_apply${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 ## CLI
 
 ```
-hued                            # print current colors
-hued where                      # print path to the controlling .hued file
-hued get bg|fg                  # print the resolved hex for a channel
-hued set <color>                # set background color
-hued set bg|fg <color>          # set the named channel
-hued mod [bg|fg] <op> [<args>]  # apply pastel transforms to a channel
-hued apply                      # repaint the terminal to match the current .hued
-hued resolve <color>            # print canonical #rrggbb for a color (requires pastel)
-hued pack [<dir>] [-o <file>]   # export all .hued files under <dir> to JSON
-hued unpack <file> [--force]    # restore .hued files from a JSON export
-hued -i [--live]                # open interactive color picker
+hued                              # print current colors
+hued where                        # print path to the controlling .hued file
+hued get bg|fg                    # print the resolved hex for a channel
+hued set <color>                  # set background color
+hued set bg|fg <color>            # set the named channel
+hued mod [bg|fg] <op> [<args>]... # apply pastel transforms to a channel
+hued apply                        # repaint the terminal to match the current .hued
+hued resolve <color>              # print canonical #rrggbb for a color (requires pastel)
+hued pack [<dir>] [-o <file>]     # export all .hued files under <dir> to JSON
+hued unpack <file> [--force]      # restore .hued files from a JSON export
+hued -i [--live]                  # open interactive color picker
 ```
 
 `set` also accepts a color from stdin when no color argument is given, so pipelines work:
@@ -95,21 +95,34 @@ pastel darken 0.2 red | pastel format hex | hued set bg
 ```
 
 `mod` (alias: `adjust`) is sugar for the read-transform-write loop. The channel
-is optional and defaults to `bg`.
+is optional and defaults to `bg`. Ops chain, and the whole chain produces one
+write to `.hued`.
+
+Amounts are percentages: `20%` and `20` mean the same thing, and a bare `0.2`
+is rejected as ambiguous. A negative amount runs the opposite op, so
+`darken -10%` is `lighten 10%`. For `lightness`, `saturation` and `hue`, a
+leading `+` or `-` makes the value relative; unsigned sets the HSL component
+absolutely.
 
 ```
-hued mod bg darken 20%      # 20% and 20 are the same; 0.2 is rejected as ambiguous
-hued mod bg darken -10%     # a negative amount runs the opposite op
+hued mod darken 20%         # channel omitted, so this is the background
+hued mod bg darken -10%     # same as: hued mod bg lighten 10%
 hued mod fg rotate 30deg
 hued mod bg mix '#0000ff' 25%
-hued mod bg lightness 40%   # unsigned: set HSL lightness
+hued mod bg lightness 40%   # unsigned: HSL lightness becomes 40%
 hued mod bg lightness +10%  # signed: relative, same as lighten 10%
 hued mod bg hue +30deg
 hued mod bg darken 10% rotate 30deg desaturate 5%   # chained, one write
 ```
 
-Ops: `darken`, `lighten`, `saturate`, `desaturate`, `rotate`, `complement`,
-`to-gray`, `mix`, `lightness`, `saturation`, `hue`.
+Ops:
+
+- `darken`, `lighten`, `saturate`, `desaturate` — `<amount>`, e.g. `20%`, `20`, `-10%`
+- `rotate` — `<degrees>`, e.g. `30`, `30deg`, `30°`, `-90`
+- `complement`, `to-gray` — no arguments
+- `mix` — `<other-color> [<ratio>]`, ratio defaults to `50%`
+- `lightness`, `saturation` — `<value>`, e.g. `40%`, `+10%`
+- `hue` — `<degrees>`, e.g. `200deg`, `+30deg`
 
 `pack` defaults to the current directory if none is given. `unpack` skips existing `.hued` files unless `--force` is passed. `get`, `mod`, and `resolve` all shell out to [`pastel`](https://github.com/sharkdp/pastel) (`brew install pastel`); `pastel` accepts named colors, hex, `rgb()`, `hsl()`, etc.
 
