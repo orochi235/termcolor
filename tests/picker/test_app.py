@@ -631,7 +631,7 @@ _TEST_COLORS = {
     "white": "#ffffff",
 }
 
-# Patch NAMED_COLORS so swatch_idx math is deterministic
+# Patch the active palette so swatch_idx math is deterministic
 import unittest.mock as _mock
 
 def _se_state(**kwargs) -> State:
@@ -645,7 +645,7 @@ def _se_state(**kwargs) -> State:
 
 def test_se_arrow_right_increments_swatch_idx():
     s = _se_state(swatch_idx=0)
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_RIGHT, char=None, shift=False, ctrl=False))
     assert new_s.swatch_idx == 1
 
@@ -653,21 +653,21 @@ def test_se_arrow_right_increments_swatch_idx():
 def test_se_arrow_right_clamps_at_last():
     # 5 colors, idx=4 (last), right should clamp
     s = _se_state(swatch_idx=4)
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_RIGHT, char=None, shift=False, ctrl=False))
     assert new_s.swatch_idx == 4
 
 
 def test_se_arrow_left_decrements_swatch_idx():
     s = _se_state(swatch_idx=2)
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_LEFT, char=None, shift=False, ctrl=False))
     assert new_s.swatch_idx == 1
 
 
 def test_se_arrow_left_clamps_at_zero():
     s = _se_state(swatch_idx=0)
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_LEFT, char=None, shift=False, ctrl=False))
     assert new_s.swatch_idx == 0
 
@@ -680,7 +680,7 @@ def test_se_arrow_down_jumps_by_num_cols(monkeypatch):
     # halfW = 40, SE pane w = 40-2 = 38, num_cols = max(1, (38-2)//5) = 7
     # So arrow-down moves by 7.
     s = _se_state(swatch_idx=0)
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_DOWN, char=None, shift=False, ctrl=False),
                           cols=80, rows=24)
     # With 5 colors, min(5-1, 0+7) = 4
@@ -689,7 +689,7 @@ def test_se_arrow_down_jumps_by_num_cols(monkeypatch):
 
 def test_se_arrow_up_jumps_by_num_cols(monkeypatch):
     s = _se_state(swatch_idx=4)
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_UP, char=None, shift=False, ctrl=False),
                           cols=80, rows=24)
     # max(0, 4-7) = 0
@@ -699,7 +699,7 @@ def test_se_arrow_up_jumps_by_num_cols(monkeypatch):
 def test_se_navigation_previews_hovered_color():
     # Right arrow -> swatch_idx=1 -> green -> bg updates to green
     s = _se_state(swatch_idx=0, bg=RGB(0, 0, 0), step="bg")
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_RIGHT, char=None, shift=False, ctrl=False))
     # Entries in "name" sort order: red, green, blue, black, white
     # After moving to idx=1 (green #00ff00):
@@ -708,7 +708,7 @@ def test_se_navigation_previews_hovered_color():
 
 def test_se_navigation_previews_to_fg_when_step_fg():
     s = _se_state(swatch_idx=0, fg=RGB(0, 0, 0), step="fg")
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, _ = update(s, KeyEvent(key=Key.ARROW_RIGHT, char=None, shift=False, ctrl=False))
     assert new_s.fg == RGB(0, 255, 0)
     assert new_s.bg == s.bg   # bg unchanged
@@ -716,7 +716,7 @@ def test_se_navigation_previews_to_fg_when_step_fg():
 
 def test_se_enter_selects_and_advances():
     s = _se_state(swatch_idx=2, step="bg")  # blue
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         new_s, action = update(s, KeyEvent(key=Key.ENTER, char=None, shift=False, ctrl=False))
     assert action is Action.CONTINUE
     assert new_s.step == "fg"
@@ -725,7 +725,7 @@ def test_se_enter_selects_and_advances():
 
 def test_se_enter_on_fg_step_confirms():
     s = _se_state(swatch_idx=0, step="fg")
-    with _mock.patch("src.picker.app.NAMED_COLORS", _TEST_COLORS):
+    with _mock.patch("src.picker.app._PALETTE", _TEST_COLORS):
         _, action = update(s, KeyEvent(key=Key.ENTER, char=None, shift=False, ctrl=False))
     assert action is Action.CONFIRM
 
@@ -860,3 +860,12 @@ def test_run_handles_keyboard_interrupt_as_cancel():
         rc = run(RGB(0, 0, 0), RGB(255, 255, 255), None, live=False)
 
     assert rc == 1
+
+
+def test_palette_is_a_copy_of_named_colors():
+    """--xkcd mutates _PALETTE; NAMED_COLORS must stay the unmodified CSS-wins list."""
+    from src.picker.app import _PALETTE
+    from src.picker.names import NAMED_COLORS
+
+    assert _PALETTE is not NAMED_COLORS
+    assert NAMED_COLORS["red"] == "#ff0000"

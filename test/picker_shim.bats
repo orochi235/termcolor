@@ -114,3 +114,60 @@ STUB
   # Exit code should be 127 (python3 not found), not 1 (shim logic error)
   [ "$status" -eq 127 ]
 }
+
+@test "bin/hued -x -i: passes --xkcd through to the picker" {
+  tmpdir=$(mktemp -d)
+  printf "background=#112233\n" > "$tmpdir/.hued"
+  mkdir -p "$tmpdir/stubbin"
+  cat > "$tmpdir/stubbin/hued-pick" <<'STUB'
+#!/usr/bin/env bash
+echo "PICKER_CALLED args=$*" >&2
+exit 1
+STUB
+  chmod +x "$tmpdir/stubbin/hued-pick"
+  cp "$HUED" "$tmpdir/stubbin/hued"
+  run bash -c "cd '$tmpdir' && '$tmpdir/stubbin/hued' -x -i </dev/null 2>&1"
+  rm -rf "$tmpdir"
+  [[ "$output" =~ PICKER_CALLED ]]
+  [[ "$output" =~ --xkcd ]]
+}
+
+@test "bin/hued -i: HUED_LOOKUP_PREFER_XKCD=1 passes --xkcd through" {
+  tmpdir=$(mktemp -d)
+  printf "background=#112233\n" > "$tmpdir/.hued"
+  mkdir -p "$tmpdir/stubbin"
+  cat > "$tmpdir/stubbin/hued-pick" <<'STUB'
+#!/usr/bin/env bash
+echo "PICKER_CALLED args=$*" >&2
+exit 1
+STUB
+  chmod +x "$tmpdir/stubbin/hued-pick"
+  cp "$HUED" "$tmpdir/stubbin/hued"
+  run bash -c "cd '$tmpdir' && HUED_LOOKUP_PREFER_XKCD=1 '$tmpdir/stubbin/hued' -i </dev/null 2>&1"
+  rm -rf "$tmpdir"
+  [[ "$output" =~ PICKER_CALLED ]]
+  [[ "$output" =~ --xkcd ]]
+}
+
+@test "bin/hued -i: no --xkcd without the flag or the variable" {
+  tmpdir=$(mktemp -d)
+  printf "background=#112233\n" > "$tmpdir/.hued"
+  mkdir -p "$tmpdir/stubbin"
+  cat > "$tmpdir/stubbin/hued-pick" <<'STUB'
+#!/usr/bin/env bash
+echo "PICKER_CALLED args=$*" >&2
+exit 1
+STUB
+  chmod +x "$tmpdir/stubbin/hued-pick"
+  cp "$HUED" "$tmpdir/stubbin/hued"
+  run bash -c "cd '$tmpdir' && HUED_LOOKUP_PREFER_XKCD=0 '$tmpdir/stubbin/hued' -i </dev/null 2>&1"
+  rm -rf "$tmpdir"
+  [[ "$output" =~ PICKER_CALLED ]]
+  [[ ! "$output" =~ --xkcd ]]
+}
+
+@test "hued-pick accepts --xkcd" {
+  run "$HUED_PICK" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ --xkcd ]]
+}

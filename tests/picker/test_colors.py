@@ -117,3 +117,15 @@ def test_nearest_name_close_match():
 
 def test_nearest_name_empty_returns_empty_string():
     assert nearest_name(RGB(128, 128, 128), {}) == ""
+
+
+def test_nearest_name_prefers_xkcd_when_merged():
+    from src.picker.colors import RGB, nearest_name
+    from src.picker.names import NAMED_COLORS, XKCD_OVERRIDES
+
+    assert nearest_name(RGB(255, 0, 0), NAMED_COLORS) == "red"
+
+    merged = dict(NAMED_COLORS)
+    merged.update(XKCD_OVERRIDES)
+    assert nearest_name(RGB(0xe5, 0, 0), merged) == "red"
+    assert merged["red"] == "#e50000"

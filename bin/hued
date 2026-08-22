@@ -590,11 +590,14 @@ PYEOF
     fi
     _live_flag=""
     for _arg in "$@"; do [[ "$_arg" == "--live" ]] && _live_flag="--live" && break; done
+    _xkcd_flag=""
+    [[ "${_HUED_XKCD:-0}" == "1" ]] && _xkcd_flag="--xkcd"
     _tmpfile=$(mktemp)
     "$_picker" \
       ${_current_bg:+--bg "$_current_bg"} \
       ${_current_fg:+--fg "$_current_fg"} \
-      ${_live_flag:+"$_live_flag"} --output "$_tmpfile" || { rm -f "$_tmpfile"; exit 0; }
+      ${_live_flag:+"$_live_flag"} \
+      ${_xkcd_flag:+"$_xkcd_flag"} --output "$_tmpfile" || { rm -f "$_tmpfile"; exit 0; }
     while IFS='=' read -r _key _value; do
       case "$_key" in
         background) _hued_set_key "background" "$_value" ;;

@@ -71,7 +71,10 @@ from src.picker.colors import (
     hex_to_rgb, rgb_to_hex,
 )
 from src.picker.keys import Key, KeyEvent
-from src.picker.names import NAMED_COLORS
+from src.picker.names import NAMED_COLORS, XKCD_OVERRIDES
+
+# Active palette for this run. main() merges XKCD_OVERRIDES in under --xkcd.
+_PALETTE: dict[str, str] = dict(NAMED_COLORS)
 
 # Ordered model list (mirrors TS MODELS constant)
 _MODELS: list[str] = ["rgb", "hsl", "oklch", "lab"]
@@ -425,7 +428,7 @@ def update(
 
         # Build the filtered+sorted entry list (same logic as render_swatch_browser)
         from src.picker.components.swatch_browser import sort_entries
-        all_entries = list(NAMED_COLORS.items())
+        all_entries = list(_PALETTE.items())
         filtered = [(n, h) for n, h in all_entries
                     if state.filter.lower() in n.lower()]
         entries = sort_entries(filtered, state.sort_mode)
@@ -647,7 +650,7 @@ def render(state: State, cols: int, rows: int) -> Frame:
         step=state.step,
         live=state.live,
         current_hex=rgb_to_hex(state.current),
-        nearest_name=nearest_name(state.current, NAMED_COLORS),
+        nearest_name=nearest_name(state.current, _PALETTE),
     )
     render_terminal_preview(
         frame,
@@ -746,7 +749,7 @@ def render(state: State, cols: int, rows: int) -> Frame:
             col=se_col + 1,
             w=sb_w,
             h=sb_h,
-            colors=NAMED_COLORS,
+            colors=_PALETTE,
             filter_str=state.filter,
             sort_mode=state.sort_mode,
             focused_idx=state.swatch_idx,
@@ -917,8 +920,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="Apply colors to terminal in real time via OSC")
     parser.add_argument("--output", default=None,
                         help="Write result to this file instead of stdout")
+    parser.add_argument("--xkcd", action="store_true",
+                        help="prefer xkcd values for names CSS also defines")
 
     args = parser.parse_args(argv)
+
+    if args.xkcd:
+        _PALETTE.update(XKCD_OVERRIDES)
 
     try:
         initial_bg = hex_to_rgb(args.bg)
