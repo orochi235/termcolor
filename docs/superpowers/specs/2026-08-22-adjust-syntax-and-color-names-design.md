@@ -146,6 +146,44 @@ A hand-edited or pre-7822786 `.hued` naming a color is the only exposure:
 
 Everything else resolves exactly as it does today.
 
+### The `-x` flag
+
+`-x` makes xkcd the preferred vocabulary for the 95 names both sources define.
+It is a per-invocation flag with no env var or `.hued` equivalent:
+
+```
+hued set red        -> #ff0000   (CSS)
+hued -x set red     -> #e50000   (xkcd)
+hued set emerald    -> #01a049   (xkcd-only; -x changes nothing)
+```
+
+The generator emits the 95 overrides a second time under a namespaced key in the
+same file:
+
+```bash
+declare -A _HUED_NAMES=(
+  [red]=#ff0000
+  [emerald]=#01a049
+  ...
+  [xkcd:red]=#e50000
+  [xkcd:gray]=#bebebe
+)
+```
+
+This preserves the existing grep-based lookup: `grep '\[red\]='` cannot match
+`[xkcd:red]=`, so `hued.sh:23` and `hued.fish:15` need no change. With `-x`,
+`_hued_resolve_hex` tries `[xkcd:<name>]=` first and falls back to `[<name>]=`.
+Cost is ~2 KB.
+
+`-x` is a global flag parsed before the subcommand (`hued -x set red`), because
+hued's dispatcher switches on `$1` and a per-subcommand flag would have to be
+added to each arm.
+
+`-x` also flips reverse lookup, so `hued -x get bg --name` and `hued -x -i`
+prefer xkcd names for a given hex. In Python this means `src/picker/names.py`
+exports both `NAMED_COLORS` (CSS-wins) and `XKCD_OVERRIDES` (the 95), with
+callers merging the second over the first when `-x` is set.
+
 ### Key normalization
 
 Keys are lowercased with spaces, hyphens and apostrophes stripped, so
