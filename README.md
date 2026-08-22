@@ -12,11 +12,28 @@ foreground=#c8ff59
 
 When you `cd` into that directory (or any subdirectory), your terminal background changes. When you leave, it resets. The nearest `.hued` walking up from `$PWD` wins.
 
-Named colors from the [X11 rgb.txt](https://gitlab.freedesktop.org/xorg/app/rgb/-/raw/master/rgb.txt) list are accepted as input:
+Named colors come from the CSS Color Module Level 4 list (148 names,
+authoritative) plus the [xkcd color survey](https://xkcd.com/color/rgb.txt)
+(839 more, CC0) — 987 in total. Multi-word xkcd names work with or without the
+spaces: `hued set "baby poop green"` and `hued set babypoopgreen` are the same.
 
 ```zsh
 hued set bg midnightblue
 ```
+
+95 names appear in both lists. CSS wins by default, so `hued set red` is
+`#ff0000`. Pass `-x` (or `--xkcd`) to prefer xkcd's reading instead:
+
+```zsh
+hued set red        # #ff0000  (CSS)
+hued -x set red     # #e50000  (xkcd)
+hued -x -i          # the picker, speaking xkcd
+```
+
+`hued get bg --name` reverses the lookup: it prints the name of the closest
+color to whatever the channel holds. Without `-x` the search runs over the
+CSS-wins list, so an xkcd-flavored hex lands on an xkcd-only name — `#e50000`
+reports `fireenginered`, and only `hued -x get bg --name` calls it `red`.
 
 hued always **stores a hex value** so any tool reading `.hued` gets a usable color without needing the name table. The original name is kept as an inline comment:
 
@@ -76,8 +93,9 @@ PROMPT_COMMAND="_hued_apply${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 
 ```
 hued                              # print current colors
+hued [-x] <command>               # -x: prefer xkcd values for the 92 shared names
 hued where                        # print path to the controlling .hued file
-hued get bg|fg                    # print the resolved hex for a channel
+hued get bg|fg [--name]           # print a channel's resolved hex, or its nearest name
 hued set <color>                  # set background color
 hued set bg|fg <color>            # set the named channel
 hued mod [bg|fg] <op> [<args>]... # apply pastel transforms to a channel
@@ -166,6 +184,17 @@ background=none
 immediately (they emit the color escapes to your terminal after writing the
 file), so you no longer have to wait for the next prompt. You can also force a
 repaint anytime with `hued apply` — handy after editing a `.hued` by hand.
+
+`HUED_LOOKUP_PREFER_XKCD` is the standing form of `-x`: export it and every
+lookup — CLI and prompt hook alike — prefers xkcd's value for the 92 names the
+two lists disagree on. It is off when unset, empty, `0`, `false` or `no`
+(any case) and on for anything else; unlike hued's other variables, `=0` really
+does mean off. `-x` cannot turn it back off, so clear it for one command to get
+the CSS reading:
+
+```bash
+HUED_LOOKUP_PREFER_XKCD= hued set red   # #ff0000, just this once
+```
 
 Note: the prompt hook prefers the `hued` binary when it is on your `PATH`. For
 `HUED_BACKGROUND` / `HUED_FOREGROUND` to take effect through it, **export** them
