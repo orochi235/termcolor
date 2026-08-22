@@ -15,7 +15,7 @@ _hued_completion() {
   elif [[ $prev == "mod" ]]; then
     mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
   elif [[ "$pprev" == "mod" && ( "$prev" == "bg" || "$prev" == "fg" ) ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "darken lighten saturate desaturate rotate complement to-gray mix" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue" -- "$cur")
   elif [[ $prev == "resolve" ]]; then
     if [[ -f "$names_file" ]]; then
       mapfile -t COMPREPLY < <(

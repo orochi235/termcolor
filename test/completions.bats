@@ -105,3 +105,16 @@ _complete() {
   [[ "${COMPREPLY[*]}" != *"bg"* ]]
   [[ "${COMPREPLY[*]}" != *"fg"* ]]
 }
+
+# --- mod ops ---
+
+@test "completions: all three shells list the new HSL ops" {
+  for f in completions/hued.bash completions/hued.fish completions/_hued; do
+    grep -q "lightness" "$BATS_TEST_DIRNAME/../$f" || {
+      echo "missing lightness in $f"; return 1; }
+    grep -q "saturation" "$BATS_TEST_DIRNAME/../$f" || {
+      echo "missing saturation in $f"; return 1; }
+    grep -q "hue" "$BATS_TEST_DIRNAME/../$f" || {
+      echo "missing hue in $f"; return 1; }
+  done
+}

@@ -1,6 +1,6 @@
 set -l names_file "$HOMEBREW_PREFIX/share/hued-names.sh"
 set -l subcommands set unset fork get mod apply where resolve pack unpack
-set -l mod_ops darken lighten saturate desaturate rotate complement to-gray mix
+set -l mod_ops darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue
 
 complete -c hued -f
 complete -c hued -n "not __fish_seen_subcommand_from $subcommands" -a "set"     -d "Create or update .hued in the current directory"
