@@ -106,6 +106,88 @@ _hued_invert() {
 
 _HUED_OPS="darken, lighten, saturate, desaturate, rotate, complement, to-gray, mix, lightness, saturation, hue"
 
+# Apply a chain of ops to a color, printing the resulting hex.
+# Usage: _hued_mod_run <color> <op> [args...] [<op> [args...]]...
+_hued_mod_run() {
+  local color="$1"; shift
+  local op raw amount deg other verb prop rc
+
+  while [[ $# -gt 0 ]]; do
+    op="$1"; shift
+    case "$op" in
+      darken|lighten|saturate|desaturate)
+        [[ $# -gt 0 ]] || { echo "hued mod: $op requires an amount" >&2; return 1; }
+        raw="$1"; shift
+        amount=$(_hued_parse_amount "$raw") && rc=0 || rc=$?
+        _hued_amount_error "$rc" "$raw" || return 1
+        if [[ "$amount" == -* ]]; then
+          op=$(_hued_invert "$op")
+          amount="${amount#-}"
+        fi
+        color=$(pastel "$op" "$amount" "$color" | pastel format hex) || return 1
+        ;;
+      rotate)
+        [[ $# -gt 0 ]] || { echo "hued mod: rotate requires degrees" >&2; return 1; }
+        raw="$1"; shift
+        deg=$(_hued_parse_degrees "$raw") || {
+          echo "hued mod: '$raw' is not a number of degrees" >&2; return 1; }
+        color=$(pastel rotate -- "$deg" "$color" | pastel format hex) || return 1
+        ;;
+      complement|to-gray)
+        color=$(pastel "$op" "$color" | pastel format hex) || return 1
+        ;;
+      mix)
+        [[ $# -gt 0 ]] || { echo "hued mod: mix requires a color" >&2; return 1; }
+        other="$1"; shift
+        amount="0.5"
+        if [[ $# -gt 0 ]] && ! _hued_is_op "$1"; then
+          raw="$1"; shift
+          amount=$(_hued_parse_amount "$raw") && rc=0 || rc=$?
+          _hued_amount_error "$rc" "$raw" || return 1
+          [[ "$amount" == -* ]] && {
+            echo "hued mod: mix ratio cannot be negative" >&2; return 1; }
+        fi
+        color=$(pastel mix --fraction "$amount" "$other" "$color" | pastel format hex) || return 1
+        ;;
+      lightness|saturation)
+        [[ $# -gt 0 ]] || { echo "hued mod: $op requires a value" >&2; return 1; }
+        raw="$1"; shift
+        amount=$(_hued_parse_amount "$raw") && rc=0 || rc=$?
+        _hued_amount_error "$rc" "$raw" || return 1
+        if [[ "$raw" == [+-]* ]]; then
+          if [[ "$op" == "lightness" ]]; then
+            verb="lighten"; [[ "$amount" == -* ]] && verb="darken"
+          else
+            verb="saturate"; [[ "$amount" == -* ]] && verb="desaturate"
+          fi
+          color=$(pastel "$verb" "${amount#-}" "$color" | pastel format hex) || return 1
+        else
+          prop="hsl-lightness"
+          [[ "$op" == "saturation" ]] && prop="hsl-saturation"
+          color=$(pastel set "$prop" "$amount" "$color" | pastel format hex) || return 1
+        fi
+        ;;
+      hue)
+        [[ $# -gt 0 ]] || { echo "hued mod: hue requires degrees" >&2; return 1; }
+        raw="$1"; shift
+        deg=$(_hued_parse_degrees "$raw") || {
+          echo "hued mod: '$raw' is not a number of degrees" >&2; return 1; }
+        if [[ "$raw" == [+-]* ]]; then
+          color=$(pastel rotate -- "$deg" "$color" | pastel format hex) || return 1
+        else
+          color=$(pastel set hsl-hue "$deg" "$color" | pastel format hex) || return 1
+        fi
+        ;;
+      *)
+        echo "hued mod: unknown op '$op' ($_HUED_OPS)" >&2
+        return 1
+        ;;
+    esac
+  done
+
+  printf '%s' "$color"
+}
+
 _hued_read_stdin_color() {
   [[ -t 0 ]] && return 1
   local line
