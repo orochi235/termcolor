@@ -233,6 +233,48 @@ teardown() {
   grep -q "foreground=#00ff00" .hued
 }
 
+# --- color names ---
+
+@test "names: xkcd-only name resolves" {
+  "$HUED" set emerald
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#01a049" ]]
+}
+
+@test "names: multi-word name resolves with spaces stripped" {
+  "$HUED" set "baby poop green"
+  a=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+  rm -f .hued
+  "$HUED" set babypoopgreen
+  b=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+  [[ "$a" == "$b" ]]
+  [[ "$a" == "#8f9805" ]]
+}
+
+@test "names: canonical CSS keywords keep their CSS values" {
+  for pair in red:#ff0000 green:#008000 blue:#0000ff gray:#808080 \
+              navy:#000080 teal:#008080 lime:#00ff00 yellow:#ffff00; do
+    name="${pair%%:*}"; want="${pair##*:}"
+    rm -f .hued
+    "$HUED" set "$name"
+    got=$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')
+    [[ "$got" == "$want" ]] || { echo "$name resolved to $got, want $want"; return 1; }
+  done
+}
+
+@test "names: the two carried-over X11 names take their xkcd values" {
+  "$HUED" set navyblue
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#001146" ]]
+  rm -f .hued
+  "$HUED" set violetred
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "#a50055" ]]
+}
+
+@test "names: dropped X11 numbered variant no longer resolves" {
+  run "$HUED" set gray50
+  [ "$status" -eq 0 ]
+  [[ "$(grep ^background= .hued | cut -d= -f2 | awk '{print $1}')" == "gray50" ]]
+}
+
 # --- get ---
 
 @test "get: missing channel fails with usage" {
