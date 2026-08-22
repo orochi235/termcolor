@@ -376,6 +376,15 @@ teardown() {
   [[ "$output" == *"20%"* ]]
 }
 
+@test "mod bg lightness: ambiguity message keeps the sign" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  run "$HUED" mod bg lightness +0.5
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ambiguous"* ]]
+  [[ "$output" == *"+50%"* ]]
+}
+
 @test "mod bg darken: explicit fractional percent is allowed" {
   command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
   printf "background=#888888\n" > .hued

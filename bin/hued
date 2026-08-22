@@ -71,7 +71,9 @@ _hued_amount_error() {
       return 1
       ;;
     2)
-      echo "hued mod: $2 is ambiguous — write \"$2%\" for $2 percent, or \"$(awk -v n="$2" 'BEGIN{printf "%g", n*100}')%\"" >&2
+      local sign="" mag="$2"
+      if [[ "$mag" == [+-]* ]]; then sign="${mag:0:1}"; mag="${mag:1}"; fi
+      echo "hued mod: $2 is ambiguous — write \"$2%\" for $2 percent, or \"${sign}$(awk -v a="$mag" 'BEGIN{printf "%g", a*100}')%\"" >&2
       return 1
       ;;
   esac
