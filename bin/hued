@@ -87,6 +87,25 @@ _hued_parse_degrees() {
   printf '%s' "$val"
 }
 
+_hued_is_op() {
+  case "$1" in
+    darken|lighten|saturate|desaturate|rotate|complement|to-gray|mix|lightness|saturation|hue)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_hued_invert() {
+  case "$1" in
+    darken)     printf 'lighten' ;;
+    lighten)    printf 'darken' ;;
+    saturate)   printf 'desaturate' ;;
+    desaturate) printf 'saturate' ;;
+  esac
+}
+
+_HUED_OPS="darken, lighten, saturate, desaturate, rotate, complement, to-gray, mix, lightness, saturation, hue"
+
 _hued_read_stdin_color() {
   [[ -t 0 ]] && return 1
   local line
