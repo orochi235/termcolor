@@ -150,22 +150,22 @@ Everything else resolves exactly as it does today.
 ### The `-x` flag
 
 `-x` makes xkcd the preferred vocabulary for the 92 names where the two sources
-disagree. `HUED_XKCD` does the same for a whole shell or a direnv'd project:
+disagree. `HUED_LOOKUP_PREFER_XKCD` does the same for a whole shell or a direnv'd project:
 
 ```
 hued set red              -> #ff0000   (CSS)
 hued -x set red           -> #e50000   (xkcd)
-HUED_XKCD=1 hued set red  -> #e50000   (xkcd)
+HUED_LOOKUP_PREFER_XKCD=1 hued set red  -> #e50000   (xkcd)
 hued set emerald          -> #01a049   (xkcd-only; neither changes it)
 ```
 
-`-x` and `HUED_XKCD` are equivalent and independent — either one turns the
+`-x` and `HUED_LOOKUP_PREFER_XKCD` are equivalent and independent — either one turns the
 preference on, and the flag cannot turn it back off. To get one CSS lookup while
-the variable is set, clear it for that command: `HUED_XKCD= hued set red`.
+the variable is set, clear it for that command: `HUED_LOOKUP_PREFER_XKCD= hued set red`.
 
-`HUED_XKCD` is off when unset, empty, `0`, `false` or `no` (case-insensitive),
+`HUED_LOOKUP_PREFER_XKCD` is off when unset, empty, `0`, `false` or `no` (case-insensitive),
 and on for any other value. The repo's existing `HUED_BACKGROUND` convention is a
-bare `-n` test, which would make `HUED_XKCD=0` mean *on* — the wrong answer for a
+bare `-n` test, which would make `HUED_LOOKUP_PREFER_XKCD=0` mean *on* — the wrong answer for a
 boolean, and silent when it happens.
 
 The generator emits the 92 conflicting values a second time under a namespaced key in the
