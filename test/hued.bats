@@ -649,6 +649,68 @@ teardown() {
   [[ "$output" == *"cannot be negative"* ]]
 }
 
+@test "mod bg lightness: signed value is relative" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg lightness +10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel lighten 0.1 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg lightness: negative signed value darkens" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg lightness -10%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel darken 0.1 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg lightness: unsigned value sets HSL lightness absolutely" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg lightness 40%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  [[ "$new" == "#336699" ]]
+}
+
+@test "mod bg saturation: unsigned value sets HSL saturation absolutely" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg saturation 90%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel set hsl-saturation 0.9 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg saturation: signed value is relative" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#cc4444\n" > .hued
+  "$HUED" mod bg saturation -25%
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel desaturate 0.25 '#cc4444' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg hue: unsigned value sets hue absolutely" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg hue 200deg
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel set hsl-hue 200 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
+@test "mod bg hue: signed value rotates" {
+  command -v pastel >/dev/null 2>&1 || skip "pastel not installed"
+  printf "background=#336699\n" > .hued
+  "$HUED" mod bg hue +30deg
+  new=$(grep ^background= .hued | cut -d= -f2)
+  expected=$(pastel rotate -- 30 '#336699' | pastel format hex)
+  [[ "$new" == "$expected" ]]
+}
+
 @test "mod bg: fails when pastel not installed" {
   command -v pastel >/dev/null 2>&1 && skip "pastel is installed"
   printf "background=#ff0000\n" > .hued
