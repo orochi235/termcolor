@@ -1,7 +1,7 @@
 .PHONY: color-names test
 
 color-names:
-	./scripts/generate-names.sh
+	python3 scripts/generate-names.py
 
 test:
 	bats test/
