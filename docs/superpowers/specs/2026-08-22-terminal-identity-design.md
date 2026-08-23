@@ -3,7 +3,8 @@
 **What this is:** a design for making a terminal session show, at a glance, which repo and
 which branch it belongs to — as color, not text you have to read.
 **Who it's for:** whoever builds it next. Assumes you know hued but not this session's history.
-**Status:** designed and mechanism-proven 2026-08-22; nothing built.
+**Status:** designed and mechanism-proven 2026-08-22. The `.hued` format support is built;
+nothing renders yet.
 
 ## The constraint everything else follows from
 
@@ -112,31 +113,21 @@ the image last, assume nothing survived, and run a periodic compare-and-repair a
 session's cwd resolves to. That repair path also fixes the original bug — a session clobbered
 mid-flight, which `precmd` can never reach.
 
-## Next increment: file format only, no rendering
+## File format support — built
 
-Decided 2026-08-22. Nothing above the file format gets built yet. The goal is that external
-tools — a Claude hook creating a repo, a `post-checkout` hook, brainhouse — can *write* colour
-policy into `.hued` and read it back, while hued itself continues to render only
-`background`/`foreground`. Rendering the accent, the image, and the status bar all stay unbuilt.
+`accent`, `branch-hue`, `branch-lightness` and `branch-chroma` are first-class keys as of
+hued 3.4.0. `hued get`, `set` and `unset` all take them, and `hued -a` prints every key in the
+controlling file (bare `hued` still prints only `background`/`foreground`). `branch-*` values are
+validated as ranges and stored canonically — `22..38` is written as `22%..38%`, `30..90` as
+`30deg..90deg`, and a range mixing a signed endpoint with an absolute one is rejected, since
+signed means relative and unsigned means absolute.
 
-Verified already working against `main` at be58d38:
+The footgun is closed: `hued set accent '#ccff00'` used to fall through to the
+"unrecognized first argument is a color" arm, writing `background=accent` and discarding the
+value. A two-argument `set` with an unknown key now fails and writes nothing.
 
-- Read paths ignore unknown keys: `hued`, `hued apply`, `hued get bg`, and both fallback hooks
-  all resolve `background` normally with `accent` and `branch-*` present.
-- `_hued_set_key` preserves unknown lines, so `hued mod` does not eat them.
-- `hued pack` carries the new keys into the JSON and `hued unpack` restores them byte-for-byte.
-
-What the increment has to add:
-
-- `hued get <key>` and `hued set <key> <value>` for `accent`, `branch-hue`, `branch-lightness`
-  and `branch-chroma`. Today `hued get accent` is a usage error.
-- **A footgun to close first:** `set`'s fallback arm treats an unrecognized first argument as a
-  colour, so `hued set accent '#ccff00'` silently writes `background=accent` and discards the
-  value. An external tool doing the natural thing corrupts the file. Two-argument `set` with an
-  unknown key must fail loudly.
-- Validation for the range syntax (`+30deg..+90deg`, `22%..38%`), reusing the signed/unsigned
-  rule `hued mod` already implements.
-- `hued unset <key>`, and documentation of the full format.
+Rendering is still unbuilt — the accent image, the status bar, and the `post-checkout` minting
+hook. `hued mod` remains `bg`/`fg` only; it does not transform `accent`.
 
 ## Open
 

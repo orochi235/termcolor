@@ -157,3 +157,52 @@ _complete() {
       echo "missing hue in $f"; return 1; }
   done
 }
+
+# --- format keys beyond bg/fg ---
+
+@test "get: suggests accent and the branch policy keys" {
+  _complete hued get ""
+  [[ "${COMPREPLY[*]}" == *"accent"* ]]
+  [[ "${COMPREPLY[*]}" == *"branch-hue"* ]]
+  [[ "${COMPREPLY[*]}" == *"branch-lightness"* ]]
+  [[ "${COMPREPLY[*]}" == *"branch-chroma"* ]]
+}
+
+@test "unset: suggests accent and the branch policy keys" {
+  _complete hued unset ""
+  [[ "${COMPREPLY[*]}" == *"accent"* ]]
+  [[ "${COMPREPLY[*]}" == *"branch-hue"* ]]
+}
+
+@test "set: suggests accent and the branch policy keys" {
+  _complete hued set ""
+  [[ "${COMPREPLY[*]}" == *"accent"* ]]
+  [[ "${COMPREPLY[*]}" == *"branch-chroma"* ]]
+}
+
+@test "set accent: completes color names" {
+  prefix="$(mktemp -d)"
+  mkdir -p "$prefix/share"
+  cp "$BATS_TEST_DIRNAME/../hued-names.sh" "$prefix/share/hued-names.sh"
+  HOMEBREW_PREFIX="$prefix" _complete hued set accent "re"
+  rm -rf "$prefix"
+  [[ "${COMPREPLY[*]}" == *"red"* ]]
+}
+
+@test "set branch-hue: does not complete color names" {
+  prefix="$(mktemp -d)"
+  mkdir -p "$prefix/share"
+  cp "$BATS_TEST_DIRNAME/../hued-names.sh" "$prefix/share/hued-names.sh"
+  HOMEBREW_PREFIX="$prefix" _complete hued set branch-hue "re"
+  rm -rf "$prefix"
+  [[ "${COMPREPLY[*]}" != *"red"* ]]
+}
+
+@test "completions: all three shells offer the new keys" {
+  for f in completions/hued.bash completions/hued.fish completions/_hued; do
+    for key in accent branch-hue branch-lightness branch-chroma; do
+      grep -qF "$key" "$BATS_TEST_DIRNAME/../$f" || {
+        echo "missing $key in $f"; return 1; }
+    done
+  done
+}

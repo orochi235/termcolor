@@ -43,6 +43,38 @@ background=#191970  # midnightblue
 
 Everything after the value on a line is treated as a comment and ignored when parsing.
 
+## Keys
+
+`.hued` holds one `key=value` per line. hued paints `background` and
+`foreground`; the other keys are identity metadata it stores for other tools to
+read — **nothing in hued renders `accent` or mints branch colors yet.**
+
+```ini
+background=#470013
+foreground=#ffffff
+accent=#ccff00              # a highlight color, for tools that draw one
+branch-hue=+30deg..+90deg   # the range a per-branch color is minted from
+branch-lightness=22%..38%
+branch-chroma=70%..100%
+```
+
+`accent` is a color like the other two, names and all. The `branch-*` keys are
+ranges: a signed endpoint is relative to this repo's own color, an unsigned one
+is absolute, and a range has to be all one or the other — the same rule `mod`
+uses. A lone value stands for a degenerate range.
+
+`get`, `set` and `unset` take any of these keys:
+
+```zsh
+hued set accent limegreen        # accent=#32cd32  # limegreen
+hued set branch-hue +30deg..+90deg
+hued get accent --name           # limegreen
+hued unset branch-chroma
+```
+
+Bare `hued` prints `background` and `foreground`. `hued -a` prints every key the
+file holds.
+
 ## Install
 
 ### Homebrew (recommended)
@@ -92,12 +124,14 @@ PROMPT_COMMAND="_hued_apply${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 ## CLI
 
 ```
-hued                              # print current colors
+hued                              # print background and foreground
+hued -a                           # print every key in the controlling .hued
 hued [-x] <command>               # -x: prefer xkcd values for the 92 shared names
 hued where                        # print path to the controlling .hued file
-hued get bg|fg [--name]           # print a channel's resolved hex, or its nearest name
+hued get <key> [--name]           # print a key's resolved hex, or its nearest name
 hued set <color>                  # set background color
-hued set bg|fg <color>            # set the named channel
+hued set <key> <value>            # set a named key
+hued unset <key>                  # remove a key
 hued mod [bg|fg] <op> [<args>]... # apply pastel transforms to a channel
 hued apply                        # repaint the terminal to match the current .hued
 hued resolve <color>              # print canonical #rrggbb for a color (requires pastel)

@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-HUED_VERSION="3.3.1"
+HUED_VERSION="3.4.0"
 
 _HUED_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -201,6 +201,77 @@ _hued_read_stdin_color() {
   printf '%s' "$line"
 }
 
+# The keys `.hued` understands. Color keys hold a color; policy keys hold a
+# minting range consumed by external tools — hued itself renders neither yet.
+_HUED_KEY_LIST="bg|fg|accent|branch-hue|branch-lightness|branch-chroma"
+
+# Canonicalize a key argument, or return 1 if it is not one of ours.
+_hued_key() {
+  case "${1:-}" in
+    bg|background) printf 'background' ;;
+    fg|foreground) printf 'foreground' ;;
+    accent) printf 'accent' ;;
+    branch-hue|branch-lightness|branch-chroma) printf '%s' "$1" ;;
+    *) return 1 ;;
+  esac
+}
+
+_hued_is_policy_key() { [[ "$1" == branch-* ]]; }
+
+# Validate one endpoint of a policy range, printing "<canonical>|<signed>".
+# Prints its own error and returns 1 on failure.
+_hued_policy_endpoint() {
+  local cmd="$1" key="$2" raw="$3" unit num
+  if [[ "$key" == "branch-hue" ]]; then
+    unit="deg"; num="${raw%deg}"; num="${num%°}"
+  else
+    unit="%"; num="${raw%\%}"
+  fi
+  if [[ ! "$num" =~ ^([+-]?)([0-9]+(\.[0-9]+)?)$ ]]; then
+    echo "$cmd: '$raw' is not a valid $key value (expected e.g. 30$unit or +30$unit)" >&2
+    return 1
+  fi
+  local sign="${BASH_REMATCH[1]}" mag="${BASH_REMATCH[2]}"
+  # Same ambiguity rule as `hued mod`: a bare 0.22 could mean either.
+  if [[ "$unit" == "%" && "$num" == "$raw" ]] \
+     && awk -v a="$mag" 'BEGIN{exit !(a>0 && a<1)}'; then
+    echo "$cmd: $raw is ambiguous — write \"$raw%\" for $raw percent, or \"${sign}$(awk -v a="$mag" 'BEGIN{printf "%g", a*100}')%\"" >&2
+    return 1
+  fi
+  printf '%s%s|%s' "$num" "$unit" "${sign:+1}"
+}
+
+# Validate a policy value ("A..B" or a lone "A"), printing its canonical form.
+# Signed endpoints are relative to the repo's base color, unsigned absolute —
+# so a range mixing the two has no meaning.
+_hued_policy_value() {
+  local cmd="$1" key="$2" raw="$3" lo_out hi_out
+  if [[ "$raw" != *".."* ]]; then
+    lo_out=$(_hued_policy_endpoint "$cmd" "$key" "$raw") || return 1
+    printf '%s' "${lo_out%|*}"
+    return 0
+  fi
+  lo_out=$(_hued_policy_endpoint "$cmd" "$key" "${raw%%..*}") || return 1
+  hi_out=$(_hued_policy_endpoint "$cmd" "$key" "${raw#*..}") || return 1
+  if [[ "${lo_out#*|}" != "${hi_out#*|}" ]]; then
+    echo "$cmd: '$raw' mixes a signed endpoint with an absolute one — a $key range must be all signed (relative) or all unsigned (absolute)" >&2
+    return 1
+  fi
+  printf '%s..%s' "${lo_out%|*}" "${hi_out%|*}"
+}
+
+# Replace (or append) one key's line in ./.hued, creating the file if needed.
+_hued_put_line() {
+  local key="$1" line="$2"
+  if [[ -f .hued ]]; then
+    grep -v "^${key}=" .hued > .hued.tmp || true
+    printf '%s\n' "$line" >> .hued.tmp
+    mv .hued.tmp .hued
+  else
+    printf "# https://github.com/orochi235/hued\n%s\n" "$line" > .hued
+  fi
+}
+
 _hued_set_key() {
   local key="$1" raw="$2" color line
   color="$(_hued_normalize_color "$raw")"
@@ -212,14 +283,14 @@ _hued_set_key() {
         && "$raw" != "none" && "$color" =~ ^#[0-9a-f]{6}$ ]]; then
     line="${line}  # ${raw}"
   fi
-  if [[ -f .hued ]]; then
-    grep -v "^${key}=" .hued > .hued.tmp || true
-    printf '%s\n' "$line" >> .hued.tmp
-    mv .hued.tmp .hued
-  else
-    printf "# https://github.com/orochi235/hued\n%s\n" "$line" > .hued
-  fi
+  _hued_put_line "$key" "$line"
   echo "Set ${key} to ${color} in ${PWD}/.hued"
+}
+
+_hued_set_policy_key() {
+  local key="$1" value="$2"
+  _hued_put_line "$key" "${key}=${value}"
+  echo "Set ${key} to ${value} in ${PWD}/.hued"
 }
 
 _hued_resolve_hex() {
@@ -328,6 +399,11 @@ case "${1:-}" in
     grep '^background=\|^foreground=' "$file"
     ;;
 
+  -a|--all)
+    file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
+    grep -E '^[A-Za-z][A-Za-z0-9-]*=' "$file"
+    ;;
+
   -v|--version|version)
     echo "hued $HUED_VERSION"
     ;;
@@ -351,14 +427,21 @@ case "${1:-}" in
     ;;
 
   get)
-    case "${2:-}" in
-      bg|background) key="background" ;;
-      fg|foreground) key="foreground" ;;
-      *) echo "Usage: hued get [bg|fg] [--name]" >&2; exit 1 ;;
-    esac
+    key=$(_hued_key "${2:-}") || {
+      echo "Usage: hued get [${_HUED_KEY_LIST}] [--name]" >&2
+      exit 1
+    }
     file=$(_hued_find) || { echo "No .hued file found" >&2; exit 1; }
     raw=$({ grep -m1 "^${key}=" "$file" || true; } | cut -d= -f2 | awk '{print $1}')
     [[ -z "$raw" ]] && exit 1
+    if _hued_is_policy_key "$key"; then
+      [[ "${3:-}" == "--name" ]] && {
+        echo "hued get: --name names a color; ${key} holds a range" >&2
+        exit 1
+      }
+      printf '%s\n' "$raw"
+      exit 0
+    fi
     # Ahead of the pastel check: reverse lookup is pure Python.
     if [[ "${3:-}" == "--name" ]]; then
       hex=$(_hued_resolve_hex "$raw")
@@ -400,28 +483,30 @@ case "${1:-}" in
     ;;
 
   set)
-    case "${2:-}" in
-      bg|background)
-        color="${3:-}"
-        [[ -z "$color" ]] && { color="$(_hued_read_stdin_color)" || color=""; }
-        [[ -z "$color" ]] && { echo "Usage: hued set bg <color>" >&2; exit 1; }
-        _hued_set_key "background" "$color"
-        ;;
-      fg|foreground)
-        color="${3:-}"
-        [[ -z "$color" ]] && { color="$(_hued_read_stdin_color)" || color=""; }
-        [[ -z "$color" ]] && { echo "Usage: hued set fg <color>" >&2; exit 1; }
-        _hued_set_key "foreground" "$color"
-        ;;
-      "")
-        color="$(_hued_read_stdin_color)" || color=""
-        [[ -z "$color" ]] && { echo "Usage: hued set [bg|fg] <color>" >&2; exit 1; }
-        _hued_set_key "background" "$color"
-        ;;
-      *)
-        _hued_set_key "background" "$2"
-        ;;
-    esac
+    shift
+    if key=$(_hued_key "${1:-}"); then
+      given="$1"; shift
+      value="${1:-}"
+      [[ -z "$value" ]] && { value="$(_hued_read_stdin_color)" || value=""; }
+      [[ -z "$value" ]] && { echo "Usage: hued set ${given} <value>" >&2; exit 1; }
+      if _hued_is_policy_key "$key"; then
+        value=$(_hued_policy_value "hued set" "$key" "$value") || exit 1
+        _hued_set_policy_key "$key" "$value"
+      else
+        _hued_set_key "$key" "$value"
+      fi
+    elif [[ $# -gt 1 ]]; then
+      # A bare `hued set <color>` is still a background, but a second argument
+      # means the first was meant as a key — writing it as a color would
+      # silently discard the value.
+      echo "hued set: unknown key '$1' (expected one of: ${_HUED_KEY_LIST//|/, })" >&2
+      exit 1
+    else
+      color="${1:-}"
+      [[ -z "$color" ]] && { color="$(_hued_read_stdin_color)" || color=""; }
+      [[ -z "$color" ]] && { echo "Usage: hued set [bg|fg] <color>" >&2; exit 1; }
+      _hued_set_key "background" "$color"
+    fi
     _hued_apply_cmd
     ;;
 
@@ -453,11 +538,10 @@ case "${1:-}" in
     ;;
 
   unset)
-    case "${2:-}" in
-      bg|background) key="background" ;;
-      fg|foreground) key="foreground" ;;
-      *) echo "Usage: hued unset [bg|fg]" >&2; exit 1 ;;
-    esac
+    key=$(_hued_key "${2:-}") || {
+      echo "Usage: hued unset [${_HUED_KEY_LIST}]" >&2
+      exit 1
+    }
     [[ -f .hued ]] || { echo "hued unset: no .hued in ${PWD}" >&2; exit 1; }
     if ! grep -q "^${key}=" .hued; then
       echo "hued unset: ${key} not set in ${PWD}/.hued" >&2
@@ -618,7 +702,8 @@ PYEOF
     ;;
 
   *)
-    echo "Usage: hued [-x] [where | get [bg|fg] [--name] | set [bg|fg] <color> | unset [bg|fg] | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
+    echo "Usage: hued [-x] [-a | where | get <key> [--name] | set <key> <value> | unset <key> | fork | mod [bg|fg] <op> [<args>...] | resolve <color> | pack [<dir>] [-o <file>] | unpack <file> [--force] | -i [--live] | -v]" >&2
+    echo "       <key> is one of: ${_HUED_KEY_LIST//|/, }" >&2
     exit 1
     ;;
 esac

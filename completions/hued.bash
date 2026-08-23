@@ -1,18 +1,20 @@
 _hued_completion() {
-  local cur prev pprev names_file mod_ops
+  local cur prev pprev names_file mod_ops keys color_keys
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   pprev="${COMP_WORDS[COMP_CWORD-2]:-}"
   names_file="${HOMEBREW_PREFIX:-/opt/homebrew}/share/hued-names.sh"
   mod_ops="darken lighten saturate desaturate rotate complement to-gray mix lightness saturation hue"
+  keys="bg fg accent branch-hue branch-lightness branch-chroma"
+  color_keys="bg fg accent"
   COMPREPLY=()
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "set unset fork get mod apply where resolve pack unpack" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "set unset fork get mod apply where resolve pack unpack -a" -- "$cur")
   elif [[ $prev == "get" ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "$keys" -- "$cur")
   elif [[ $prev == "unset" ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "$keys" -- "$cur")
   elif [[ $prev == "mod" ]]; then
     mapfile -t COMPREPLY < <(compgen -W "bg fg $mod_ops" -- "$cur")
   elif [[ "$pprev" == "mod" && ( "$prev" == "bg" || "$prev" == "fg" ) ]]; then
@@ -24,13 +26,13 @@ _hued_completion() {
       )
     fi
   elif [[ $prev == "set" ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "$keys" -- "$cur")
     if [[ -f "$names_file" ]]; then
       mapfile -t -O "${#COMPREPLY[@]}" COMPREPLY < <(
         compgen -W "$(grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:')" -- "$cur"
       )
     fi
-  elif [[ "$pprev" == "set" && ( "$prev" == "bg" || "$prev" == "fg" ) ]]; then
+  elif [[ "$pprev" == "set" && " $color_keys " == *" $prev "* ]]; then
     if [[ -f "$names_file" ]]; then
       mapfile -t COMPREPLY < <(
         compgen -W "$(grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:')" -- "$cur"

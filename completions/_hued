@@ -11,6 +11,9 @@ _hued_colors() {
   grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:'
 }
 
+_HUED_KEYS="bg fg accent branch-hue branch-lightness branch-chroma"
+_HUED_KEY_DESCRIPTIONS='bg\:"background color" fg\:"foreground color" accent\:"accent color" branch-hue\:"branch minting hue range" branch-lightness\:"branch minting lightness range" branch-chroma\:"branch minting chroma range"'
+
 _hued() {
   local state
 
@@ -40,7 +43,7 @@ _hued() {
         set)
           local colors=("${(@f)$(_hued_colors)}")
           _alternative \
-            'channels:channel:((bg\:"set background color" fg\:"set foreground color"))' \
+            "keys:key:((${_HUED_KEY_DESCRIPTIONS}))" \
             'colors:color:($colors)'
           ;;
         pack)
@@ -54,10 +57,10 @@ _hued() {
           _describe 'color' colors
           ;;
         get)
-          _describe 'channel' '(bg:"background" fg:"foreground")'
+          _values 'key' ${(s: :)_HUED_KEYS}
           ;;
         unset)
-          _describe 'channel' '(bg:"background" fg:"foreground")'
+          _values 'key' ${(s: :)_HUED_KEYS}
           ;;
         mod)
           local ops=("${(@f)$(_hued_mod_ops)}")
@@ -70,8 +73,13 @@ _hued() {
     arg3)
       case $words[2] in
         set)
-          local colors=("${(@f)$(_hued_colors)}")
-          _describe 'color' colors
+          case $words[3] in
+            branch-hue|branch-lightness|branch-chroma) ;;
+            *)
+              local colors=("${(@f)$(_hued_colors)}")
+              _describe 'color' colors
+              ;;
+          esac
           ;;
         mod)
           local ops=("${(@f)$(_hued_mod_ops)}")
