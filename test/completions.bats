@@ -113,6 +113,38 @@ _complete() {
   [[ "${COMPREPLY[*]}" != *"fg"* ]]
 }
 
+# --- color names ---
+
+# The names file ships every key indented two spaces, so a '^\[' pattern
+# silently matches nothing.
+@test "set: completes color names from the names file" {
+  prefix="$(mktemp -d)"
+  mkdir -p "$prefix/share"
+  cp "$BATS_TEST_DIRNAME/../hued-names.sh" "$prefix/share/hued-names.sh"
+  HOMEBREW_PREFIX="$prefix" _complete hued set "re"
+  rm -rf "$prefix"
+  [[ "${COMPREPLY[*]}" == *"red"* ]]
+}
+
+@test "set bg: completes color names but not xkcd: keys" {
+  prefix="$(mktemp -d)"
+  mkdir -p "$prefix/share"
+  cp "$BATS_TEST_DIRNAME/../hued-names.sh" "$prefix/share/hued-names.sh"
+  HOMEBREW_PREFIX="$prefix" _complete hued set bg ""
+  rm -rf "$prefix"
+  [[ "${COMPREPLY[*]}" == *"aliceblue"* ]]
+  [[ "${COMPREPLY[*]}" != *"xkcd:"* ]]
+}
+
+@test "completions: all three shells read the indented key rows" {
+  for f in completions/hued.bash completions/hued.fish completions/_hued; do
+    grep -qF '^ *\[' "$BATS_TEST_DIRNAME/../$f" || {
+      echo "$f does not allow for indented key rows"; return 1; }
+    grep -qF "grep -v '^xkcd:'" "$BATS_TEST_DIRNAME/../$f" || {
+      echo "$f does not filter xkcd: keys"; return 1; }
+  done
+}
+
 # --- mod ops ---
 
 @test "completions: all three shells list the new HSL ops" {

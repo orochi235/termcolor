@@ -31,7 +31,7 @@ complete -c hued -n "__fish_seen_subcommand_from unpack" -a "--force" -d "Overwr
 
 if test -f "$names_file"
   complete -c hued -n "__fish_seen_subcommand_from set" \
-    -a "(grep -o '^\[[^]]*\]' $names_file | tr -d '[]')"
+    -a "(grep -o '^ *\[[^]]*\]' $names_file | tr -d '[] ' | grep -v '^xkcd:')"
   complete -c hued -n "__fish_seen_subcommand_from resolve" \
-    -a "(grep -o '^\[[^]]*\]' $names_file | tr -d '[]')"
+    -a "(grep -o '^ *\[[^]]*\]' $names_file | tr -d '[] ' | grep -v '^xkcd:')"
 end

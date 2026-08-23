@@ -20,20 +20,20 @@ _hued_completion() {
   elif [[ $prev == "resolve" ]]; then
     if [[ -f "$names_file" ]]; then
       mapfile -t COMPREPLY < <(
-        compgen -W "$(grep -o '^\[[^]]*\]' "$names_file" | tr -d '[]')" -- "$cur"
+        compgen -W "$(grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:')" -- "$cur"
       )
     fi
   elif [[ $prev == "set" ]]; then
     mapfile -t COMPREPLY < <(compgen -W "bg fg" -- "$cur")
     if [[ -f "$names_file" ]]; then
       mapfile -t -O "${#COMPREPLY[@]}" COMPREPLY < <(
-        compgen -W "$(grep -o '^\[[^]]*\]' "$names_file" | tr -d '[]')" -- "$cur"
+        compgen -W "$(grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:')" -- "$cur"
       )
     fi
   elif [[ "$pprev" == "set" && ( "$prev" == "bg" || "$prev" == "fg" ) ]]; then
     if [[ -f "$names_file" ]]; then
       mapfile -t COMPREPLY < <(
-        compgen -W "$(grep -o '^\[[^]]*\]' "$names_file" | tr -d '[]')" -- "$cur"
+        compgen -W "$(grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:')" -- "$cur"
       )
     fi
   elif [[ $prev == "pack" ]]; then

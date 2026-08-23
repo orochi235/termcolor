@@ -8,7 +8,7 @@ _hued_mod_ops() {
 _hued_colors() {
   local names_file="${HOMEBREW_PREFIX:-/opt/homebrew}/share/hued-names.sh"
   [[ -f "$names_file" ]] || return
-  grep -o '^\[[^]]*\]' "$names_file" | tr -d '[]'
+  grep -o '^ *\[[^]]*\]' "$names_file" | tr -d '[] ' | grep -v '^xkcd:'
 }
 
 _hued() {
