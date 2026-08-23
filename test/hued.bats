@@ -1110,6 +1110,14 @@ teardown() {
   grep -q "^background=#f0f8ff  # aliceblue$" target/.hued
 }
 
+@test "unpack: normalizes a hyphenated, mixed-case name" {
+  mkdir -p target
+  printf '{ "%s/target": { "background": "Baby-Blue" } }' "$TMPDIR" > hued.json
+  run "$HUED" unpack hued.json
+  [ "$status" -eq 0 ]
+  grep -q "^background=#a2cffe  # Baby-Blue$" target/.hued
+}
+
 @test "unpack: leaves hex values untouched" {
   mkdir -p target
   printf '{ "%s/target": { "background": "#abcdef" } }' "$TMPDIR" > hued.json
