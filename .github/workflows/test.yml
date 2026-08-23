@@ -15,5 +15,12 @@ jobs:
           sudo /tmp/bats/install.sh /usr/local
       - name: Install fish
         run: sudo apt-get update && sudo apt-get install -y fish
-      - name: Run tests
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install Python test deps
+        run: python3 -m pip install -r requirements-dev.txt
+      - name: Run bats tests
         run: bats test/
+      - name: Run pytest
+        run: python3 -m pytest
